@@ -1,6 +1,7 @@
 # Obsidian ASN.1 Syntax 插件
 
 这是一个为 Obsidian 提供 ASN.1 (Abstract Syntax Notation One) 语法高亮和格式化功能的插件。
+（原生的Markdown语法无法识别ASN.1语法）
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-4.4.4-blue.svg)](https://www.typescriptlang.org/)
