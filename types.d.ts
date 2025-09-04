@@ -7,6 +7,9 @@ declare module 'obsidian' {
   export interface Workspace {
     on(name: 'editor-change', callback: (editor: Editor) => any): EventRef;
     on(name: 'editor-save', callback: (editor: Editor) => any): EventRef;
+    on(name: 'file-open', callback: () => any): EventRef;
+    on(name: 'active-leaf-change', callback: () => any): EventRef;
+    offref(ref: EventRef): void;
     getActiveViewOfType<T extends View>(type: new (...args: any[]) => T): T | null;
   }
 
@@ -27,6 +30,7 @@ declare module 'obsidian' {
     onload(): Promise<void> | void;
     onunload(): void;
     
+    register(callback: () => void): void;
     registerEvent(ref: EventRef): void;
     registerMarkdownCodeBlockProcessor(
       language: string, 
@@ -58,6 +62,7 @@ declare module 'obsidian' {
 
   export interface Editor {
     getCursor(): EditorPosition;
+    setCursor(pos: EditorPosition): void;
     lineCount(): number;
     getLine(line: number): string;
     replaceRange(replacement: string, from: EditorPosition, to: EditorPosition): void;
@@ -95,6 +100,8 @@ declare module 'obsidian' {
     setDesc(desc: string): this;
     addSlider(callback: (slider: SliderComponent) => SliderComponent): this;
     addToggle(callback: (toggle: ToggleComponent) => ToggleComponent): this;
+    addButton(callback: (button: ButtonComponent) => ButtonComponent): this;
+    addColorPicker(callback: (colorPicker: ColorComponent) => ColorComponent): this;
   }
 
   export interface SliderComponent {
@@ -107,6 +114,17 @@ declare module 'obsidian' {
   export interface ToggleComponent {
     setValue(value: boolean): this;
     onChange(callback: (value: boolean) => any): this;
+  }
+  
+  export interface ButtonComponent {
+    setButtonText(text: string): this;
+    setCta(): this;
+    onClick(callback: () => any): this;
+  }
+  
+  export interface ColorComponent {
+    setValue(value: string): this;
+    onChange(callback: (value: string) => any): this;
   }
 }
 

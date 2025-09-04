@@ -1,66 +1,464 @@
 import { Plugin, MarkdownView, PluginSettingTab, App, Setting, Editor, EditorPosition, MarkdownPostProcessorContext } from 'obsidian';
-import * as CodeMirror from 'codemirror';
-import 'codemirror/mode/clike/clike';
+// import * as CodeMirror from 'codemirror';
+// import 'codemirror/mode/clike/clike';
+
+// ASN.1令牌接口
+interface ASN1Token {
+	type: 'module-definition' | 'begin' | 'end' | 'type-name' | 'type-definition' | 'opening-brace' | 'field' | 'closing-brace' | 'comment' | 'other';
+	content: string;
+	level: number;
+}
+
+// ASN.1结构节点接口
+interface ASN1StructureNode {
+	type: 'root' | 'module' | 'begin' | 'end' | 'type-definition' | 'field' | 'comment' | 'other';
+	name: string;
+	content: string;
+	children: ASN1StructureNode[];
+	level: number;
+	structureType?: 'SEQUENCE' | 'SET' | 'CHOICE' | 'ENUMERATED' | 'PRIMITIVE';
+	isInline?: boolean;  // 是否为单行定义
+	fields?: string[];   // 字段列表
+}
 
 // 定义插件设置接口
 interface ASN1PluginSettings {
 	indentSize: number;
 	formatOnSave: boolean;
+	maxLineLength: number;
+	autoWrapLongLines: boolean;
+	// 新增：增强自动格式化选项
+	autoFormatOnExit: boolean; // 离开代码块时自动格式化
+	autoFormatOnEnter: boolean; // 按Enter键时自动格式化
+	// 颜色设置
+	colors: {
+		keyword: string;
+		string: string;
+		comment: string;
+		number: string;
+		punctuation: string;
+		variable: string;
+		oid: string;
+		tag: string;
+		operator: string;
+	};
+	darkColors: {
+		keyword: string;
+		string: string;
+		comment: string;
+		number: string;
+		punctuation: string;
+		variable: string;
+		oid: string;
+		tag: string;
+		operator: string;
+	};
 }
 
 // 默认设置
 const DEFAULT_SETTINGS: ASN1PluginSettings = {
 	indentSize: 2,
-	formatOnSave: true
+	formatOnSave: true,
+	maxLineLength: 80,
+	autoWrapLongLines: true,
+	// 新增默认设置
+	autoFormatOnExit: true,
+	autoFormatOnEnter: true,
+	// 默认亮色主题颜色
+	colors: {
+		keyword: '#07a',
+		string: '#690',
+		comment: '#999',
+		number: '#905',
+		punctuation: '#999',
+		variable: '#DD4A68',
+		oid: '#8E44AD',
+		tag: '#E67E22',
+		operator: '#2C3E50'
+	},
+	// 默认暗色主题颜色
+	darkColors: {
+		keyword: '#c678dd',
+		string: '#98c379',
+		comment: '#5c6370',
+		number: '#d19a66',
+		punctuation: '#abb2bf',
+		variable: '#e06c75',
+		oid: '#BB86FC',
+		tag: '#F39C12',
+		operator: '#56B6C2'
+	}
 };
 
 export default class ASN1Plugin extends Plugin {
 	settings: ASN1PluginSettings;
 
 	async onload() {
-		console.log('Loading ASN.1 plugin');
+		try {
+			console.log('Loading ASN.1 plugin');
 
-		// 加载设置
-		await this.loadSettings();
+			// 加载设置
+			await this.loadSettings();
 
-		// 注册ASN.1语法高亮
-		this.registerASN1Mode();
+			// 注册ASN.1语法高亮
+			this.registerASN1Mode();
 
-		// 注册代码块语言
-		this.registerMarkdownCodeBlockProcessor('asn1', (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
-			const pre = document.createElement('pre');
-			const code = document.createElement('code');
-			code.className = 'language-asn1';
-			code.textContent = source;
-			pre.appendChild(code);
-			el.appendChild(pre);
+			// 注册代码块语言
+			this.registerMarkdownCodeBlockProcessor('asn1', (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+				try {
+					const pre = document.createElement('pre');
+					const code = document.createElement('code');
+					code.className = 'language-asn1';
+					code.textContent = source;
+					pre.appendChild(code);
+					el.appendChild(pre);
+					
+					// 应用语法高亮
+					this.highlightASN1(code);
+				} catch (error) {
+					console.error('Error in ASN.1 code block processor:', error);
+				}
+			});
+
+			// 添加格式化命令
+			this.addCommand({
+				id: 'format-asn1',
+				name: 'Format ASN.1',
+				editorCallback: (editor: Editor) => {
+					try {
+						this.formatASN1(editor);
+					} catch (error) {
+						console.error('Error in format command:', error);
+					}
+				}
+			});
 			
-			// 应用语法高亮
-			this.highlightASN1(code);
-		});
+			// 添加实时格式化命令
+			this.addCommand({
+				id: 'auto-format-asn1',
+				name: 'Auto Format ASN.1 (Real-time)',
+				editorCallback: (editor: Editor) => {
+					try {
+						this.toggleAutoFormatting(editor);
+					} catch (error) {
+						console.error('Error in auto format command:', error);
+					}
+				}
+			});
+			
+			// 添加测试命令
+			this.addCommand({
+				id: 'test-asn1-auto-format',
+				name: 'Test ASN.1 Auto Format (Current Block)',
+				editorCallback: (editor: Editor) => {
+					try {
+						if (this.isASN1CodeBlock(editor)) {
+							this.autoFormatCurrentBlock(editor);
+							console.log('Auto format test executed');
+						} else {
+							console.log('Not in ASN.1 code block');
+						}
+					} catch (error) {
+						console.error('Error in test command:', error);
+					}
+				}
+			});
 
-		// 添加格式化命令
-		this.addCommand({
-			id: 'format-asn1',
-			name: 'Format ASN.1',
-			editorCallback: (editor: Editor) => {
-				this.formatASN1(editor);
+			// 添加设置选项卡
+			this.addSettingTab(new ASN1SettingTab(this.app, this));
+			
+			// 初始化自定义颜色
+			this.applyCustomColors();
+
+			// 设置全局自动格式化功能 - 新的可靠实现
+			this.setupGlobalAutoFormatting();
+
+			console.log('ASN.1 plugin loaded successfully');
+		} catch (error) {
+			console.error('Error loading ASN.1 plugin:', error);
+			throw error;
+		}
+	}
+
+	// 设置自动格式化 - 增强版本，支持离开代码块和Enter键触发
+	setupAutoFormatting(editor: Editor) {
+		// 检查是否启用了任何自动格式化功能
+		if (!this.settings.formatOnSave && !this.settings.autoFormatOnExit && !this.settings.autoFormatOnEnter) {
+			return;
+		}
+		
+		let lastASN1BlockState = false; // 跟踪是否在ASN.1代码块中
+		let formatTimer: NodeJS.Timeout | null = null; // 格式化延时器
+		
+		// 使用Obsidian的编辑器事件系统
+		const editorChange = this.app.workspace.on('editor-change', (changedEditor: Editor) => {
+			console.log('Editor change detected');
+			if (changedEditor === editor) {
+				console.log('Change in target editor');
+				
+				// 清除之前的延时器
+				if (formatTimer) {
+					clearTimeout(formatTimer);
+					formatTimer = null;
+				}
+				
+				const currentlyInASN1Block = this.isASN1CodeBlock(changedEditor);
+				
+				// 检查是否刚离开ASN.1代码块
+				if (this.settings.autoFormatOnExit && lastASN1BlockState && !currentlyInASN1Block) {
+					console.log('Left ASN.1 code block, triggering format');
+					formatTimer = setTimeout(() => {
+						// 需要找到刚才编辑的代码块并格式化
+						this.formatLastASN1Block(changedEditor);
+					}, 300);
+				}
+				
+				// 如果当前在ASN.1代码块中且启用了保存时格式化
+				if (this.settings.formatOnSave && currentlyInASN1Block) {
+					// 检查最后输入的字符
+					const cursor = changedEditor.getCursor();
+					if (cursor && cursor.ch > 0) {
+						const currentLine = changedEditor.getLine(cursor.line);
+						const lastChar = currentLine.charAt(cursor.ch - 1);
+						console.log('Last character:', lastChar);
+						
+						// 在输入特定字符后触发格式化
+						if (lastChar === '}' || lastChar === ';' || lastChar === ',' || lastChar === ')' || lastChar === ']') {
+							console.log('Trigger character detected, scheduling format');
+							formatTimer = setTimeout(() => {
+								if (this.isASN1CodeBlock(changedEditor)) {
+									this.autoFormatCurrentBlock(changedEditor);
+								}
+							}, 200);
+						}
+					}
+				}
+				
+				// 更新状态
+				lastASN1BlockState = currentlyInASN1Block;
 			}
 		});
-
-		// 添加设置选项卡
-		this.addSettingTab(new ASN1SettingTab(this.app, this));
-
-		// 如果启用了保存时格式化，注册事件
-		if (this.settings.formatOnSave) {
-			this.registerEvent(
-				this.app.workspace.on('editor-change', (editor: Editor) => {
-					// 简化处理，当内容变化时检查是否需要格式化
+		
+		// 监听Enter键和光标移动
+		const handleKeyDown = (event: KeyboardEvent) => {
+			// 清除之前的延时器
+			if (formatTimer) {
+				clearTimeout(formatTimer);
+				formatTimer = null;
+			}
+			
+			// Enter键触发格式化
+			if (this.settings.autoFormatOnEnter && event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.altKey) {
+				console.log('Enter key pressed');
+				formatTimer = setTimeout(() => {
 					if (this.isASN1CodeBlock(editor)) {
-						// 可以在这里添加延迟格式化逻辑
+						console.log('Formatting after Enter in ASN.1 block');
+						this.autoFormatCurrentBlock(editor);
 					}
-				})
-			);
+				}, 200);
+			}
+			
+			// 监听方向键，可能表示离开代码块
+			if (this.settings.autoFormatOnExit && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+				formatTimer = setTimeout(() => {
+					const currentlyInASN1Block = this.isASN1CodeBlock(editor);
+					if (lastASN1BlockState && !currentlyInASN1Block) {
+						console.log('Left ASN.1 code block via navigation, triggering format');
+						this.formatLastASN1Block(editor);
+					}
+					lastASN1BlockState = currentlyInASN1Block;
+				}, 500);
+			}
+		};
+		
+		// 监听鼠标点击事件，检测光标离开代码块
+		const handleMouseClick = (event: MouseEvent) => {
+			if (!this.settings.autoFormatOnExit) {
+				return;
+			}
+			
+			// 清除之前的延时器
+			if (formatTimer) {
+				clearTimeout(formatTimer);
+				formatTimer = null;
+			}
+			
+			formatTimer = setTimeout(() => {
+				const currentlyInASN1Block = this.isASN1CodeBlock(editor);
+				if (lastASN1BlockState && !currentlyInASN1Block) {
+					console.log('Left ASN.1 code block via mouse click, triggering format');
+					this.formatLastASN1Block(editor);
+				}
+				lastASN1BlockState = currentlyInASN1Block;
+			}, 300);
+		};
+		
+		// 尝试添加事件监听
+		const editorElement = (editor as any).containerEl || (editor as any).cm?.getWrapperElement();
+		if (editorElement) {
+			editorElement.addEventListener('keydown', handleKeyDown);
+			if (this.settings.autoFormatOnExit) {
+				editorElement.addEventListener('click', handleMouseClick);
+			}
+			
+			// 在插件卸载时移除事件监听
+			this.register(() => {
+				editorElement.removeEventListener('keydown', handleKeyDown);
+				editorElement.removeEventListener('click', handleMouseClick);
+				this.app.workspace.offref(editorChange);
+				if (formatTimer) {
+					clearTimeout(formatTimer);
+				}
+			});
+		} else {
+			// 如果无法获取编辑器元素，只注册workspace事件
+			this.register(() => {
+				this.app.workspace.offref(editorChange);
+				if (formatTimer) {
+					clearTimeout(formatTimer);
+				}
+			});
+		}
+		
+		// 初始化状态
+		lastASN1BlockState = this.isASN1CodeBlock(editor);
+	}
+	
+	// 自动格式化当前代码块
+	autoFormatCurrentBlock(editor: Editor) {
+		try {
+			console.log('autoFormatCurrentBlock called');
+			if (this.isASN1CodeBlock(editor)) {
+				console.log('In ASN.1 code block, formatting...');
+				const cursor = editor.getCursor();
+				const originalCursorLine = cursor.line;
+				const originalCursorCh = cursor.ch;
+				
+				this.formatASN1(editor);
+				
+				// 尝试恢复光标位置
+				try {
+					// 获取新的行数，确保光标位置有效
+					const newLineCount = editor.lineCount();
+					const targetLine = Math.min(originalCursorLine, newLineCount - 1);
+					const lineContent = editor.getLine(targetLine);
+					const targetCh = Math.min(originalCursorCh, lineContent.length);
+					
+					editor.setCursor({ line: targetLine, ch: targetCh });
+					console.log('Cursor position restored');
+				} catch (error) {
+					// 如果恢复光标失败，忽略错误
+					console.warn('Could not restore cursor position:', error);
+				}
+			} else {
+				console.log('Not in ASN.1 code block');
+			}
+		} catch (error) {
+			console.error('Error in autoFormatCurrentBlock:', error);
+		}
+	}
+	
+	// 格式化最近编辑的ASN.1代码块
+	formatLastASN1Block(editor: Editor) {
+		try {
+			console.log('formatLastASN1Block called');
+			const cursor = editor.getCursor();
+			const lineCount = editor.lineCount();
+			
+			if (!cursor || lineCount === 0) {
+				return;
+			}
+			
+			// 搜索附近的ASN.1代码块
+			let searchStart = Math.max(0, cursor.line - 50); // 向上搜索50行
+			let searchEnd = Math.min(lineCount - 1, cursor.line + 50); // 向下搜索50行
+			
+			for (let i = searchStart; i <= searchEnd; i++) {
+				try {
+					const line = editor.getLine(i);
+					if (line && line.trim().startsWith('```asn1')) {
+						// 找到ASN.1代码块开始，查找结束位置
+						let endLine = i + 1;
+						while (endLine < lineCount) {
+							const endLineContent = editor.getLine(endLine);
+							if (endLineContent && endLineContent.trim() === '```') {
+								// 找到代码块，格式化它
+								console.log(`Found ASN.1 block from line ${i} to ${endLine}, formatting...`);
+								this.formatSpecificASN1Block(editor, i, endLine);
+								return;
+							}
+							endLine++;
+						}
+					}
+				} catch (error) {
+					console.warn('Error reading line', i, ':', error);
+				}
+			}
+			
+			console.log('No ASN.1 block found near cursor position');
+		} catch (error) {
+			console.error('Error in formatLastASN1Block:', error);
+		}
+	}
+	
+	// 格式化指定的ASN.1代码块
+	formatSpecificASN1Block(editor: Editor, startLine: number, endLine: number) {
+		try {
+			console.log(`Formatting ASN.1 block from line ${startLine} to ${endLine}`);
+			
+			// 提取代码块内容
+			const codeLines = [];
+			for (let i = startLine + 1; i < endLine; i++) {
+				try {
+					codeLines.push(editor.getLine(i));
+				} catch (error) {
+					console.warn('Error reading line', i, ':', error);
+					codeLines.push('');
+				}
+			}
+			
+			if (codeLines.length === 0) {
+				console.log('No content to format');
+				return;
+			}
+			
+			// 格式化代码
+			const originalCode = codeLines.join('\n');
+			console.log('Original code to format:', originalCode);
+			
+			const formattedCode = this.formatASN1Code(originalCode);
+			console.log('Formatted code result:', formattedCode);
+			
+			if (formattedCode === originalCode) {
+				console.log('Code is already formatted');
+				return;
+			}
+			
+			// 替换代码块内容
+			const cursor = editor.getCursor();
+			try {
+				// 确保格式化结果以换行符结尾，避免影响markdown的```结束标记
+				const finalFormattedCode = formattedCode.endsWith('\n') ? formattedCode : formattedCode + '\n';
+				
+				editor.replaceRange(
+					finalFormattedCode,
+					{ line: startLine + 1, ch: 0 },
+					{ line: endLine, ch: 0 }
+				);
+				
+				// 尝试恢复光标位置
+				const newLineCount = editor.lineCount();
+				const targetLine = Math.min(cursor.line, newLineCount - 1);
+				const lineContent = editor.getLine(targetLine);
+				const targetCh = Math.min(cursor.ch, lineContent ? lineContent.length : 0);
+				
+				editor.setCursor({ line: targetLine, ch: targetCh });
+				console.log('Specific ASN.1 block formatted successfully');
+			} catch (error) {
+				console.error('Error replacing code content:', error);
+			}
+		} catch (error) {
+			console.error('Error in formatSpecificASN1Block:', error);
 		}
 	}
 
@@ -125,132 +523,80 @@ export default class ASN1Plugin extends Plugin {
 			return false;
 		}
 	}
+	
+	// 切换自动格式化功能
+	toggleAutoFormatting(editor: Editor) {
+		if (this.settings.formatOnSave) {
+			this.settings.formatOnSave = false;
+			console.log('Auto formatting disabled');
+		} else {
+			this.settings.formatOnSave = true;
+			console.log('Auto formatting enabled');
+		}
+		this.saveSettings();
+	}
+	
+	// 应用自定义颜色
+	applyCustomColors() {
+		// 移除旧的自定义样式
+		const existingStyle = document.getElementById('asn1-custom-colors');
+		if (existingStyle) {
+			existingStyle.remove();
+		}
+		
+		// 创建新的自定义样式
+		const style = document.createElement('style');
+		style.id = 'asn1-custom-colors';
+		
+		const lightColors = this.settings.colors;
+		const darkColors = this.settings.darkColors;
+		
+		style.textContent = `
+			/* ASN.1 自定义颜色 - 亮色主题 */
+			.asn1-keyword { color: ${lightColors.keyword} !important; }
+			.asn1-string { color: ${lightColors.string} !important; }
+			.asn1-comment { color: ${lightColors.comment} !important; }
+			.asn1-number { color: ${lightColors.number} !important; }
+			.asn1-punctuation { color: ${lightColors.punctuation} !important; }
+			.asn1-variable { color: ${lightColors.variable} !important; }
+			.asn1-oid { color: ${lightColors.oid} !important; }
+			.asn1-tag { color: ${lightColors.tag} !important; }
+			.asn1-operator { color: ${lightColors.operator} !important; }
+			
+			/* ASN.1 自定义颜色 - 暗色主题 */
+			.theme-dark .asn1-keyword { color: ${darkColors.keyword} !important; }
+			.theme-dark .asn1-string { color: ${darkColors.string} !important; }
+			.theme-dark .asn1-comment { color: ${darkColors.comment} !important; }
+			.theme-dark .asn1-number { color: ${darkColors.number} !important; }
+			.theme-dark .asn1-punctuation { color: ${darkColors.punctuation} !important; }
+			.theme-dark .asn1-variable { color: ${darkColors.variable} !important; }
+			.theme-dark .asn1-oid { color: ${darkColors.oid} !important; }
+			.theme-dark .asn1-tag { color: ${darkColors.tag} !important; }
+			.theme-dark .asn1-operator { color: ${darkColors.operator} !important; }
+		`;
+		
+		document.head.appendChild(style);
+	}
+	
+	onunload() {
+		console.log('Unloading ASN.1 plugin');
+		
+		// 清理自定义颜色样式
+		const existingStyle = document.getElementById('asn1-custom-colors');
+		if (existingStyle) {
+			existingStyle.remove();
+		}
+	}
 
 	// 注册ASN.1语法高亮模式
+	// 注册ASN.1语法高亮模式 - 暂时简化以避免CodeMirror问题
 	registerASN1Mode() {
-		// 使用CodeMirror的C-like模式作为基础，并扩展ASN.1特定语法
-		CodeMirror.defineMode('asn1', function(config: any) {
-			// 扩展C-like模式
-			const clikeMode = CodeMirror.getMode(config, 'text/x-csrc');
-			
-			// ASN.1关键字 - 完整列表
-			const keywords = [
-				// 基本类型
-				'BOOLEAN', 'INTEGER', 'BIT', 'OCTET', 'NULL', 'OBJECT', 'REAL',
-				'ENUMERATED', 'EMBEDDED', 'UTF8String', 'RELATIVE-OID',
-				
-				// 字符串类型
-				'NumericString', 'PrintableString', 'TeletexString', 'T61String',
-				'VideotexString', 'IA5String', 'GraphicString', 'VisibleString',
-				'GeneralString', 'UniversalString', 'BMPString',
-				
-				// 时间类型
-				'UTCTime', 'GeneralizedTime',
-				
-				// 构造类型
-				'SEQUENCE', 'SET', 'CHOICE', 'STRING',
-				
-				// 标记
-				'UNIVERSAL', 'APPLICATION', 'PRIVATE', 'CONTEXT',
-				'EXPLICIT', 'IMPLICIT', 'AUTOMATIC', 'TAGS',
-				
-				// 模块定义
-				'DEFINITIONS', 'BEGIN', 'END', 'EXPORTS', 'IMPORTS', 'FROM',
-				
-				// 约束
-				'SIZE', 'WITH', 'COMPONENT', 'COMPONENTS', 'PRESENT', 'ABSENT',
-				'OPTIONAL', 'DEFAULT', 'INCLUDES', 'PATTERN',
-				
-				// 集合操作
-				'UNION', 'INTERSECTION', 'EXCEPT', 'ALL',
-				
-				// 值
-				'TRUE', 'FALSE', 'PLUS-INFINITY', 'MINUS-INFINITY',
-				'MIN', 'MAX',
-				
-				// 高级概念
-				'CLASS', 'TYPE-IDENTIFIER', 'ABSTRACT-SYNTAX', 'INSTANCE',
-				'SYNTAX', 'UNIQUE', 'CONSTRAINED', 'CHARACTER',
-				'PDV', 'EXTERNAL', 'BY', 'OF', 'IDENTIFIER'
-			];
-			
-			// 创建关键字查找表
-			const keywordsMap: {[key: string]: boolean} = {};
-			for (const keyword of keywords) {
-				keywordsMap[keyword] = true;
-			}
-			
-			// 扩展token处理
-			return {
-				startState: function() {
-					return {
-						baseState: CodeMirror.startState(clikeMode),
-						inComment: false
-					};
-				},
-				copyState: function(state: any) {
-					return {
-						baseState: CodeMirror.copyState(clikeMode, state.baseState),
-						inComment: state.inComment
-					};
-				},
-				token: function(stream: any, state: any) {
-					// 处理注释
-					if (stream.match('--')) {
-						stream.skipToEnd();
-						return 'comment';
-					}
-					
-					// 处理多行注释
-					if (state.inComment) {
-						if (stream.match('*-')) {
-							state.inComment = false;
-							return 'comment';
-						}
-						stream.next();
-						return 'comment';
-					}
-					
-					if (stream.match('-*')) {
-						state.inComment = true;
-						return 'comment';
-					}
-					
-					// 处理字符串
-					if (stream.match('"')) {
-						while (!stream.eol()) {
-							if (stream.next() === '"') {
-								break;
-							}
-						}
-						return 'string';
-					}
-					
-					// 处理关键字
-					if (stream.match(/^[A-Za-z][A-Za-z0-9-]*/)) {
-						const word = stream.current().toUpperCase();
-						if (keywordsMap[word]) {
-							return 'keyword';
-						}
-						return 'variable';
-					}
-					
-					// 处理数字
-					if (stream.match(/^\d+(\.\d+)?/)) {
-						return 'number';
-					}
-					
-					// 处理特殊字符
-					if (stream.match(/^[:{}\[\]().,;]/)) {
-						return 'punctuation';
-					}
-					
-					// 处理其他字符
-					stream.next();
-					return null;
-				}
-			};
-		});
+		try {
+			console.log('ASN.1 syntax mode registered (simplified)');
+			// TODO: 重新实现CodeMirror语法高亮
+		} catch (error) {
+			console.error('Error registering ASN.1 mode:', error);
+		}
 	}
 
 	// 应用ASN.1语法高亮 - 改进版本，增强错误处理
@@ -382,6 +728,7 @@ export default class ASN1Plugin extends Plugin {
 	// 格式化ASN.1代码 - 增强错误处理
 	formatASN1(editor: Editor) {
 		try {
+			console.log('formatASN1 started');
 			const cursor = editor.getCursor();
 			const lineCount = editor.lineCount();
 			
@@ -454,7 +801,10 @@ export default class ASN1Plugin extends Plugin {
 			
 			// 格式化代码
 			const originalCode = codeLines.join('\n');
+			console.log('Original code to format:', originalCode);
+			
 			const formattedCode = this.formatASN1Code(originalCode);
+			console.log('Formatted code result:', formattedCode);
 			
 			if (formattedCode === originalCode) {
 				console.log('Code is already formatted');
@@ -463,8 +813,11 @@ export default class ASN1Plugin extends Plugin {
 			
 			// 替换代码块内容
 			try {
+				// 确保格式化结果以换行符结尾，避免影响markdown的```结束标记
+				const finalFormattedCode = formattedCode.endsWith('\n') ? formattedCode : formattedCode + '\n';
+				
 				editor.replaceRange(
-					formattedCode,
+					finalFormattedCode,
 					{ line: startLine + 1, ch: 0 },
 					{ line: endLine, ch: 0 }
 				);
@@ -477,104 +830,922 @@ export default class ASN1Plugin extends Plugin {
 		}
 	}
 
-	// ASN.1代码格式化算法 - 改进版本
+	// 格式化ASN.1代码的主要方法 - 增强版本，支持复杂ASN.1结构解析
 	formatASN1Code(code: string): string {
-		const lines = code.split('\n');
-		const formattedLines = [];
-		let indentLevel = 0;
-		const indentSize = this.settings.indentSize;
-		let inComment = false;
+		console.log('🔧 Starting enhanced ASN.1 format with code:', code);
 		
-		for (let i = 0; i < lines.length; i++) {
+		if (!code || !code.trim()) {
+			return '';
+		}
+		
+		try {
+			// 1. 预处理：规范化输入
+			const normalized = this.normalizeASN1Code(code);
+			console.log('📝 Normalized code:', normalized);
+			
+			// 2. 解析ASN.1结构
+			const parsedStructure = this.parseASN1Structure(normalized);
+			console.log('🔍 Parsed ASN.1 structure:', parsedStructure);
+			
+			// 3. 格式化结构
+			const formatted = this.formatASN1Structure(parsedStructure);
+			console.log('✨ Final formatted result:', formatted);
+			
+			return formatted;
+		} catch (error) {
+			console.error('❌ Error in ASN.1 formatting:', error);
+			// 降级到简单格式化
+			return this.fallbackFormat(code);
+		}
+	}
+	
+	// 规范化ASN.1代码输入
+	private normalizeASN1Code(code: string): string {
+		return code
+			.replace(/\r\n/g, '\n')  // 统一换行符
+			.replace(/\r/g, '\n')
+			.replace(/\t/g, ' ')      // 制表符转空格
+			.replace(/\s+/g, ' ')     // 多个空格合并为一个
+			.replace(/\s*{\s*/g, ' { ')  // 规范化大括号前后空格
+			.replace(/\s*}\s*/g, ' } ')
+			.replace(/\s*,\s*/g, ', ')   // 规范化逗号后空格
+			.replace(/\s*::=\s*/g, ' ::= ') // 规范化定义符号
+			.trim();
+	}
+	
+	// 解析ASN.1结构
+	private parseASN1Structure(code: string): ASN1StructureNode {
+		const lines = code.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+		const rootNode: ASN1StructureNode = {
+			type: 'root',
+			name: '',
+			content: '',
+			children: [],
+			level: 0
+		};
+		
+		this.parseLines(lines, rootNode, 0);
+		return rootNode;
+	}
+	
+	// 递归解析代码行
+	private parseLines(lines: string[], parentNode: ASN1StructureNode, startIndex: number): number {
+		let i = startIndex;
+		
+		while (i < lines.length) {
 			const line = lines[i];
-			const trimmedLine = line.trim();
+			console.log(`🔍 Parsing line ${i}: "${line}"`);
 			
-			// 跳过空行，但保留它们
-			if (trimmedLine === '') {
-				formattedLines.push('');
+			// 1. 模块定义
+			if (this.isModuleDefinition(line)) {
+				const moduleNode = this.createModuleNode(line);
+				parentNode.children.push(moduleNode);
+				i++;
 				continue;
 			}
 			
-			// 检查是否在多行注释内
-			if (trimmedLine.startsWith('-*')) {
-				inComment = true;
-			}
-			if (trimmedLine.endsWith('*-')) {
-				inComment = false;
-				// 注释行保持原有缩进
-				formattedLines.push(line);
-				continue;
-			}
-			if (inComment || trimmedLine.startsWith('--')) {
-				// 注释行保持原有缩进
-				formattedLines.push(line);
+			// 2. BEGIN关键字
+			if (line.trim() === 'BEGIN' || line.includes('BEGIN')) {
+				const beginNode = this.createBeginNode();
+				parentNode.children.push(beginNode);
+				i++;
 				continue;
 			}
 			
-			// 处理减少缩进的情况 - 在添加缩进之前
-			const isClosingElement = (
-				trimmedLine === '}' || 
-				trimmedLine === ']' || 
-				trimmedLine === ')' ||
-				trimmedLine.endsWith('}') ||
-				trimmedLine.endsWith('],') ||
-				trimmedLine.endsWith('},' ) ||
-				trimmedLine === 'END' ||
-				trimmedLine.startsWith('END ')
-			);
-			
-			if (isClosingElement) {
-				indentLevel = Math.max(0, indentLevel - 1);
+			// 3. END关键字
+			if (line.trim() === 'END' || line.startsWith('END')) {
+				const endNode = this.createEndNode(line);
+				parentNode.children.push(endNode);
+				i++;
+				continue;
 			}
 			
-			// 处理标签的特殊情况 (如 [0], [APPLICATION 1])
-			const isTaggedElement = /^\s*\[\s*(?:UNIVERSAL|APPLICATION|PRIVATE|CONTEXT)?\s*\d+\s*\]/i.test(trimmedLine);
-			
-			// 生成缩进
-			const indent = ' '.repeat(indentLevel * indentSize);
-			
-			// 对于标签元素，可能需要特殊处理
-			if (isTaggedElement && !trimmedLine.includes('::=')) {
-				// 标签元素通常与上一行对齐
-				formattedLines.push(indent + trimmedLine);
-			} else {
-				formattedLines.push(indent + trimmedLine);
+			// 4. 类型定义（包括单行和多行）
+			if (this.isTypeDefinition(line)) {
+				const typeNode = this.parseTypeDefinition(line, lines, i);
+				parentNode.children.push(typeNode.node);
+				i = typeNode.nextIndex;
+				continue;
 			}
 			
-			// 处理增加缩进的情况 - 在添加缩进之后
-			const isOpeningElement = (
-				trimmedLine.endsWith('{') || 
-				trimmedLine.endsWith('[') || 
-				trimmedLine.endsWith('(') ||
-				trimmedLine === 'BEGIN' ||
-				trimmedLine.endsWith('BEGIN') ||
-				// 处理 SEQUENCE OF, SET OF 等情况
-				(/\b(?:SEQUENCE|SET|CHOICE)\b.*\{$/.test(trimmedLine)) ||
-				// 处理类型定义后跟 { 的情况
-				(/::=\s*\{$/.test(trimmedLine))
-			);
-			
-			if (isOpeningElement) {
-				indentLevel++;
+			// 5. 字段定义
+			if (this.isFieldDefinition(line)) {
+				const fieldNode = this.createFieldNode(line);
+				parentNode.children.push(fieldNode);
+				i++;
+				continue;
 			}
 			
-			// 处理特殊的ASN.1结构
-			if (/\bCOMPONENTS\s+OF\b/i.test(trimmedLine)) {
-				// COMPONENTS OF 可能需要特殊缩进处理
+			// 6. 注释
+			if (this.isComment(line)) {
+				const commentNode = this.createCommentNode(line);
+				parentNode.children.push(commentNode);
+				i++;
+				continue;
 			}
 			
-			// 处理枚举值的对齐
-			if (trimmedLine.match(/^\w+\(\d+\)[\s,]*$/)) {
-				// 枚举值，可能需要额外的缩进对齐
+			// 7. 独立的大括号
+			if (line === '}') {
+				// 结束当前结构
+				break;
+			}
+			
+			// 8. 其他内容
+			const otherNode = this.createOtherNode(line);
+			parentNode.children.push(otherNode);
+			i++;
+		}
+		
+		return i;
+	}
+
+	
+	// 检查是否为单行结构定义（增强版）
+	private isSingleLineStructure(line: string): boolean {
+		const patterns = [
+			/^\w+\s*::=\s*(SEQUENCE|SET|CHOICE|ENUMERATED)\s*\{[^{}]+\}\s*$/,
+			/^\w+\s*::=\s*(SEQUENCE|SET)\s+OF\s+\w+\s*$/,
+			/^\w+\s*::=\s*\w+\s*\([^)]*\)\s*$/  // 带约束的定义
+		];
+		
+		for (const pattern of patterns) {
+			if (pattern.test(line.trim())) {
+				console.log('✅ Detected single line structure:', line);
+				return true;
 			}
 		}
 		
-		// 后处理：处理一些特殊的格式化需求
-		return this.postProcessFormatting(formattedLines.join('\n'));
+		return false;
+	}
+
+		
+		
+	// 创建各种类型的节点
+	private createModuleNode(line: string): ASN1StructureNode {
+		const match = line.match(/(\w+)\s+DEFINITIONS\s+(.*?)\s*::=\s*BEGIN/);
+		return {
+			type: 'module',
+			name: match ? match[1] : 'Unknown',
+			content: line,
+			children: [],
+			level: 0
+		};
 	}
 	
-	// 后处理格式化
-	private postProcessFormatting(code: string): string {
+	private createBeginNode(): ASN1StructureNode {
+		return {
+			type: 'begin',
+			name: 'BEGIN',
+			content: 'BEGIN',
+			children: [],
+			level: 0
+		};
+	}
+	
+	private createEndNode(line: string): ASN1StructureNode {
+		return {
+			type: 'end',
+			name: 'END',
+			content: line,
+			children: [],
+			level: 0
+		};
+	}
+	
+	private createFieldNode(line: string): ASN1StructureNode {
+		const parts = line.split(/\s+/);
+		return {
+			type: 'field',
+			name: parts[0] || '',
+			content: line,
+			children: [],
+			level: 0
+		};
+	}
+	
+	private createCommentNode(line: string): ASN1StructureNode {
+		return {
+			type: 'comment',
+			name: 'comment',
+			content: line,
+			children: [],
+			level: 0
+		};
+	}
+	
+	private createOtherNode(line: string): ASN1StructureNode {
+		return {
+			type: 'other',
+			name: 'other',
+			content: line,
+			children: [],
+			level: 0
+		};
+	}
+	
+	// 解析类型定义（增强版）
+	private parseTypeDefinition(line: string, lines: string[], currentIndex: number): { node: ASN1StructureNode, nextIndex: number } {
+		console.log('🔍 Parsing type definition:', line);
+		
+		// 提取类型名称
+		const typeMatch = line.match(/(\w+)\s*::=\s*(.+)/);
+		if (!typeMatch) {
+			return {
+				node: this.createOtherNode(line),
+				nextIndex: currentIndex + 1
+			};
+		}
+		
+		const [, typeName, typeDefinition] = typeMatch;
+		
+		// 检查是否为单行完整定义
+		if (this.isSingleLineStructure(line)) {
+			return {
+				node: this.parseSingleLineTypeDefinition(line, typeName, typeDefinition),
+				nextIndex: currentIndex + 1
+			};
+		}
+		
+		// 检查是否为多行结构定义
+		const structureMatch = typeDefinition.match(/(SEQUENCE|SET|CHOICE|ENUMERATED)\s*\{(.*)/);
+		if (structureMatch) {
+			return this.parseMultiLineTypeDefinition(line, typeName, structureMatch[1] as any, lines, currentIndex);
+		}
+		
+		// 基本类型定义
+		return {
+			node: {
+				type: 'type-definition',
+				name: typeName,
+				content: line,
+				children: [],
+				level: 0,
+				structureType: 'PRIMITIVE'
+			},
+			nextIndex: currentIndex + 1
+		};
+	}
+	
+	// 解析单行类型定义
+	private parseSingleLineTypeDefinition(line: string, typeName: string, typeDefinition: string): ASN1StructureNode {
+		const structureMatch = typeDefinition.match(/(SEQUENCE|SET|CHOICE|ENUMERATED)\s*\{([^}]+)\}/);
+		if (!structureMatch) {
+			return this.createOtherNode(line);
+		}
+		
+		const [, structureType, fieldsStr] = structureMatch;
+		const fields = this.parseInlineFields(fieldsStr);
+		
+		return {
+			type: 'type-definition',
+			name: typeName,
+			content: line,
+			children: [],
+			level: 0,
+			structureType: structureType as any,
+			isInline: true,
+			fields: fields
+		};
+	}
+	
+	// 解析多行类型定义
+	private parseMultiLineTypeDefinition(
+		openingLine: string, 
+		typeName: string, 
+		structureType: 'SEQUENCE' | 'SET' | 'CHOICE' | 'ENUMERATED',
+		lines: string[], 
+		currentIndex: number
+	): { node: ASN1StructureNode, nextIndex: number } {
+		const node: ASN1StructureNode = {
+			type: 'type-definition',
+			name: typeName,
+			content: openingLine,
+			children: [],
+			level: 0,
+			structureType: structureType,
+			isInline: false
+		};
+		
+		// 解析字段内容直到找到匹配的大括号
+		let braceCount = 1;
+		let i = currentIndex + 1;
+		
+		while (i < lines.length && braceCount > 0) {
+			const line = lines[i].trim();
+			if (!line) {
+				i++;
+				continue;
+			}
+			
+			// 计算大括号
+			braceCount += (line.match(/\{/g) || []).length;
+			braceCount -= (line.match(/\}/g) || []).length;
+			
+			// 如果不是闭合大括号，作为字段处理
+			if (line !== '}' && braceCount > 0) {
+				const fieldNode = this.createFieldNode(line);
+				node.children.push(fieldNode);
+			}
+			
+			i++;
+		}
+		
+		return {
+			node: node,
+			nextIndex: i
+		};
+	}
+	
+	// 解析内联字段
+	private parseInlineFields(fieldsStr: string): string[] {
+		const fields: string[] = [];
+		let current = '';
+		let braceLevel = 0;
+		let parenLevel = 0;
+		let inString = false;
+		
+		for (let i = 0; i < fieldsStr.length; i++) {
+			const char = fieldsStr[i];
+			
+			if (char === '"' && (i === 0 || fieldsStr[i-1] !== '\\')) {
+				inString = !inString;
+			}
+			
+			if (!inString) {
+				if (char === '{') braceLevel++;
+				else if (char === '}') braceLevel--;
+				else if (char === '(') parenLevel++;
+				else if (char === ')') parenLevel--;
+				else if (char === ',' && braceLevel === 0 && parenLevel === 0) {
+					if (current.trim()) {
+						fields.push(current.trim());
+					}
+					current = '';
+					continue;
+				}
+			}
+			
+			current += char;
+		}
+		
+		// 添加最后一个字段
+		if (current.trim()) {
+			fields.push(current.trim());
+		}
+		
+		console.log('📋 Parsed inline fields:', fields);
+		return fields;
+	}
+	
+	// 格式化ASN.1结构
+	private formatASN1Structure(rootNode: ASN1StructureNode): string {
+		const lines: string[] = [];
+		this.formatNode(rootNode, lines, 0);
+		
+		// 清理空行并确保合适的间距
+		const cleanedLines = this.cleanupFormattedLines(lines);
+		
+		return cleanedLines.join('\n');
+	}
+	
+	// 格式化单个节点
+	private formatNode(node: ASN1StructureNode, lines: string[], level: number): void {
+		const indent = ' '.repeat(level * this.settings.indentSize);
+		
+		switch (node.type) {
+			case 'module':
+				lines.push(node.content);
+				break;
+				
+			case 'begin':
+				lines.push(indent + node.content);
+				lines.push(''); // 添加空行
+				break;
+				
+			case 'end':
+				lines.push(''); // END前添加空行
+				lines.push(indent + node.content);
+				break;
+				
+			case 'type-definition':
+				if (node.isInline && node.fields) {
+					// 处理单行定义，将其展开为多行
+					this.formatInlineTypeDefinition(node, lines, level);
+				} else {
+					// 多行定义
+					lines.push(indent + `${node.name} ::= ${node.structureType} {`);
+					// 格式化子节点（字段）
+					for (let i = 0; i < node.children.length; i++) {
+						const child = node.children[i];
+						const isLast = i === node.children.length - 1;
+						const fieldIndent = ' '.repeat((level + 1) * this.settings.indentSize);
+						const comma = isLast ? '' : ',';
+						lines.push(fieldIndent + child.content + comma);
+					}
+					lines.push(indent + '}');
+				}
+				break;
+				
+			case 'comment':
+				lines.push(indent + node.content);
+				break;
+				
+			default:
+				lines.push(indent + node.content);
+				break;
+		}
+		
+		// 递归格式化子节点
+		if (node.type !== 'type-definition' || !node.isInline) {
+			for (const child of node.children) {
+				this.formatNode(child, lines, level + 1);
+			}
+		}
+	}
+	
+	// 格式化内联类型定义
+	private formatInlineTypeDefinition(node: ASN1StructureNode, lines: string[], level: number): void {
+		const indent = ' '.repeat(level * this.settings.indentSize);
+		const fieldIndent = ' '.repeat((level + 1) * this.settings.indentSize);
+		
+		// 添加类型定义开头
+		lines.push(indent + `${node.name} ::= ${node.structureType} {`);
+		
+		// 添加字段
+		if (node.fields) {
+			for (let i = 0; i < node.fields.length; i++) {
+				const field = node.fields[i];
+				const isLast = i === node.fields.length - 1;
+				const comma = isLast ? '' : ',';
+				lines.push(fieldIndent + field + comma);
+			}
+		}
+		
+		// 添加结束大括号
+		lines.push(indent + '}');
+	}
+	
+	// 清理格式化后的行
+	private cleanupFormattedLines(lines: string[]): string[] {
+		const cleaned: string[] = [];
+		
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			const prevLine = i > 0 ? lines[i - 1] : null;
+			const nextLine = i < lines.length - 1 ? lines[i + 1] : null;
+			
+			// 跳过多余的空行
+			if (line === '' && prevLine === '') {
+				continue;
+			}
+			
+			// 跳过文件开头的空行
+			if (i === 0 && line === '') {
+				continue;
+			}
+			
+			// 跳过文件结尾的空行（最后允许一个空行）
+			if (i === lines.length - 1 && line === '' && prevLine === '') {
+				continue;
+			}
+			
+			cleaned.push(line);
+		}
+		
+		return cleaned;
+	}
+	
+	// 降级格式化方法（出错时使用）
+	private fallbackFormat(code: string): string {
+		console.log('🆘 Using fallback formatting...');
+		
+		// 简单的行处理
+		const lines = code.split('\n');
+		const result: string[] = [];
+		let indentLevel = 0;
+		const indentStr = ' '.repeat(this.settings.indentSize);
+		
+		for (const line of lines) {
+			const trimmed = line.trim();
+			if (!trimmed) continue;
+			
+			// 减少缩进（大括号闭合）
+			if (trimmed === '}' || trimmed.startsWith('}')) {
+				indentLevel = Math.max(0, indentLevel - 1);
+			}
+			
+			// 添加行
+			result.push(indentStr.repeat(indentLevel) + trimmed);
+			
+			// 增加缩进（大括号开启）
+			if (trimmed.includes('{') && !trimmed.includes('}')) {
+				indentLevel++;
+			}
+		}
+		
+		return result.join('\n');
+	}
+	
+
+
+
+	private preProcessLongLines(code: string): string {
+		let processed = code;
+		
+		console.log('Original input for preprocessing:', processed);
+		
+		// 1. 处理连续的类型定义（如：Type1 ::= ... Type2 ::= ...）
+		processed = processed.replace(/(\}\s*)(\w+\s*::=)/g, '$1\n$2');
+		
+		// 2. 处理模块定义后跟类型定义的情况
+		processed = processed.replace(/(BEGIN\s+)(\w+\s*::=)/g, '$1\n$2');
+		
+		// 3. 处理类型定义后跟END的情况
+		processed = processed.replace(/(\}\s*)(END\b)/g, '$1\n$2');
+		
+		// 4. 特殊处理：将单行中包含完整结构的定义强制分解
+		// 匹配形如：TypeName ::= SEQUENCE { field1 Type1, field2 Type2, ... }
+		const singleLineStructureRegex = /(\w+\s*::=\s*(?:SEQUENCE|SET|CHOICE)\s*\{)([^}]+)(\})/g;
+		processed = processed.replace(singleLineStructureRegex, (match, prefix, fields, suffix) => {
+			console.log('Found single-line structure:', { prefix, fields, suffix });
+			
+			// 强制将字段分解为单独行
+			const processedFields = this.forceSplitFields(fields);
+			
+			if (processedFields.length > 1) {
+				// 如果有多个字段，将它们分解到不同行
+				return prefix + '\n' + processedFields.join('\n') + '\n' + suffix;
+			} else {
+				// 只有一个字段或没有字段，保持原样
+				return match;
+			}
+		});
+		
+		// 5. 处理枚举类型的单行定义
+		const enumRegex = /(\w+\s*::=\s*ENUMERATED\s*\{)([^}]+)(\})/g;
+		processed = processed.replace(enumRegex, (match, prefix, enumValues, suffix) => {
+			console.log('Found single-line enum:', { prefix, enumValues, suffix });
+			
+			const values = this.forceSplitEnumValues(enumValues);
+			if (values.length > 1) {
+				return prefix + '\n' + values.join('\n') + '\n' + suffix;
+			} else {
+				return match;
+			}
+		});
+		
+		console.log('Preprocessed result:', processed);
+		return processed;
+	}
+	
+	// 强制分割字段 - 专门用于单行结构，修复缩进问题
+	private forceSplitFields(fieldsStr: string): string[] {
+		console.log('Force splitting fields:', fieldsStr);
+		
+		const fields = [];
+		let current = '';
+		let braceCount = 0;
+		let parenCount = 0;
+		let bracketCount = 0;
+		let inString = false;
+		
+		// 清理输入字符串
+		fieldsStr = fieldsStr.trim();
+		
+		const indentStr = ' '.repeat(this.settings.indentSize); // 使用用户设置的缩进
+		
+		for (let i = 0; i < fieldsStr.length; i++) {
+			const char = fieldsStr[i];
+			const prevChar = i > 0 ? fieldsStr[i - 1] : '';
+			
+			// 处理字符串
+			if (char === '"' && prevChar !== '\\') {
+				inString = !inString;
+			}
+			
+			if (!inString) {
+				// 跟踪嵌套层级
+				if (char === '{') braceCount++;
+				else if (char === '}') braceCount--;
+				else if (char === '(') parenCount++;
+				else if (char === ')') parenCount--;
+				else if (char === '[') bracketCount++;
+				else if (char === ']') bracketCount--;
+				
+				// 在最外层遇到逗号时分割
+				else if (char === ',' && braceCount === 0 && parenCount === 0 && bracketCount === 0) {
+					const fieldContent = current.trim();
+					if (fieldContent) {
+						fields.push(indentStr + fieldContent + ','); // 使用设置的缩进
+					}
+					current = '';
+					continue;
+				}
+			}
+			
+			current += char;
+		}
+		
+		// 添加最后一个字段（不带逗号）
+		const lastField = current.trim();
+		if (lastField) {
+			fields.push(indentStr + lastField); // 使用设置的缩进，不加逗号
+		}
+		
+		console.log('Force split fields result:', fields);
+		return fields;
+	}
+	
+	// 强制分割枚举值 - 修复缩进问题
+	private forceSplitEnumValues(enumStr: string): string[] {
+		console.log('Force splitting enum values:', enumStr);
+		
+		const values = [];
+		let current = '';
+		let parenCount = 0;
+		
+		enumStr = enumStr.trim();
+		const indentStr = ' '.repeat(this.settings.indentSize); // 使用用户设置的缩进
+		
+		for (let i = 0; i < enumStr.length; i++) {
+			const char = enumStr[i];
+			
+			if (char === '(') parenCount++;
+			else if (char === ')') parenCount--;
+			else if (char === ',' && parenCount === 0) {
+				const value = current.trim();
+				if (value) {
+					values.push(indentStr + value + ','); // 使用设置的缩进
+				}
+				current = '';
+				continue;
+			}
+			
+			current += char;
+		}
+		
+		// 添加最后一个值（不带逗号）
+		const lastValue = current.trim();
+		if (lastValue) {
+			values.push(indentStr + lastValue); // 使用设置的缩进，不加逗号
+		}
+		
+		console.log('Force split enum values result:', values);
+		return values;
+	}
+
+	// 格式化令牌
+	private formatTokens(tokens: ASN1Token[]): string {
+		const lines: string[] = [];
+		let currentLevel = 0;
+		const indentSize = this.settings.indentSize;
+		
+		for (let i = 0; i < tokens.length; i++) {
+			const token = tokens[i];
+			const nextToken = tokens[i + 1];
+			
+			switch (token.type) {
+				case 'module-definition':
+					lines.push(token.content);
+					break;
+					
+				case 'begin':
+					lines.push(this.indent(token.content, currentLevel, indentSize));
+					currentLevel++;
+					// 在BEGIN后添加空行
+					lines.push('');
+					break;
+					
+				case 'end':
+					currentLevel = Math.max(0, currentLevel - 1);
+					// 在END前添加空行
+					if (lines[lines.length - 1] !== '') {
+						lines.push('');
+					}
+					lines.push(this.indent(token.content, currentLevel, indentSize));
+					break;
+					
+				case 'type-name':
+					lines.push(this.indent(token.content, currentLevel, indentSize));
+					break;
+					
+				case 'type-definition':
+					lines.push(this.indent(token.content, currentLevel, indentSize));
+					currentLevel++;
+					break;
+					
+				case 'opening-brace':
+					lines.push(this.indent(token.content, currentLevel, indentSize));
+					currentLevel++;
+					break;
+					
+				case 'field':
+					lines.push(this.indent(token.content, currentLevel, indentSize));
+					break;
+					
+				case 'closing-brace':
+					currentLevel = Math.max(0, currentLevel - 1);
+					lines.push(this.indent(token.content, currentLevel, indentSize));
+					// 在结构定义后添加空行（除非是最后一个或下一个是END）
+					if (nextToken && nextToken.type !== 'end' && nextToken.type !== 'closing-brace') {
+						lines.push('');
+					}
+					break;
+					
+				case 'comment':
+					if (this.settings.autoWrapLongLines) {
+						const wrappedComment = this.wrapComment(token.content, currentLevel, indentSize);
+						lines.push(...wrappedComment);
+					} else {
+						lines.push(this.indent(token.content, currentLevel, indentSize));
+					}
+					break;
+					
+				default:
+					lines.push(this.indent(token.content, currentLevel, indentSize));
+					break;
+			}
+		}
+		
+		return lines.filter((line, index) => {
+			// 移除连续的空行，但保留单个空行用于分隔
+			if (line === '') {
+				return index === 0 || index === lines.length - 1 || lines[index - 1] !== '';
+			}
+			return true;
+		}).join('\n');
+	}
+
+	// 辅助方法
+	private indent(content: string, level: number, size: number): string {
+		return ' '.repeat(level * size) + content;
+	}
+	
+	// 判断是否为模块定义
+	private isModuleDefinition(line: string): boolean {
+		return /^\w+\s+DEFINITIONS\s+.*::=\s+BEGIN$/.test(line);
+	}
+	
+	// 判断是否为类型定义
+	private isTypeDefinition(line: string): boolean {
+		return /^\w+\s*::=/.test(line);
+	}
+	
+	// 判断是否为字段定义
+	private isFieldDefinition(line: string): boolean {
+		return /^\w+\s+\w+/.test(line) && !line.includes('::=') && !line.includes('DEFINITIONS');
+	}
+	
+	// 判断是否为注释
+	private isComment(line: string): boolean {
+		return line.startsWith('--') || (line.startsWith('-*') && line.endsWith('*-'));
+	}
+	
+
+	
+	// 解析字段列表
+	private parseFieldList(fieldsStr: string): ASN1Token[] {
+		const tokens: ASN1Token[] = [];
+		const fields = this.splitFields(fieldsStr);
+		
+		for (const field of fields) {
+			if (field.trim()) {
+				tokens.push({ type: 'field', content: field, level: 1 });
+			}
+		}
+		
+		return tokens;
+	}
+	
+	// 智能分割字段 - 改进版本，更好地处理复杂字段
+	private splitFields(fieldsStr: string): string[] {
+		console.log('Splitting fields from:', fieldsStr);
+		
+		// 移除首尾空格和可能的闭合大括号
+		fieldsStr = fieldsStr.replace(/^\s*\{\s*/, '').replace(/\s*\}\s*$/, '').trim();
+		
+		const fields = [];
+		let current = '';
+		let braceCount = 0;
+		let parenCount = 0;
+		let bracketCount = 0;
+		let inString = false;
+		
+		for (let i = 0; i < fieldsStr.length; i++) {
+			const char = fieldsStr[i];
+			const prevChar = i > 0 ? fieldsStr[i - 1] : '';
+			
+			// 处理字符串
+			if (char === '"' && prevChar !== '\\') {
+				inString = !inString;
+			}
+			
+			if (!inString) {
+				// 跟踪嵌套层级
+				if (char === '{') braceCount++;
+				else if (char === '}') braceCount--;
+				else if (char === '(') parenCount++;
+				else if (char === ')') parenCount--;
+				else if (char === '[') bracketCount++;
+				else if (char === ']') bracketCount--;
+				
+				// 在所有嵌套都关闭的情况下，逗号是字段分隔符
+				else if (char === ',' && braceCount === 0 && parenCount === 0 && bracketCount === 0) {
+					const fieldContent = current.trim();
+					if (fieldContent) {
+						fields.push(fieldContent + ',');
+					}
+					current = '';
+					continue;
+				}
+			}
+			
+			current += char;
+		}
+		
+		// 添加最后一个字段（不带逗号）
+		const lastField = current.trim();
+		if (lastField) {
+			fields.push(lastField);
+		}
+		
+		console.log('Split fields result:', fields);
+		return fields;
+	}
+	
+	// 解析枚举值
+	private parseEnumValues(enumStr: string): ASN1Token[] {
+		const tokens: ASN1Token[] = [];
+		const values = this.splitEnumValues(enumStr);
+		
+		for (const value of values) {
+			if (value.trim()) {
+				tokens.push({ type: 'field', content: value, level: 1 });
+			}
+		}
+		
+		return tokens;
+	}
+	
+	// 分割枚举值
+	private splitEnumValues(enumStr: string): string[] {
+		const values = [];
+		let current = '';
+		let parenCount = 0;
+		
+		for (let i = 0; i < enumStr.length; i++) {
+			const char = enumStr[i];
+			
+			if (char === '(') parenCount++;
+			else if (char === ')') parenCount--;
+			else if (char === ',' && parenCount === 0) {
+				values.push(current.trim() + ',');
+				current = '';
+				continue;
+			}
+			
+			current += char;
+		}
+		
+		if (current.trim()) {
+			values.push(current.trim());
+		}
+		
+		return values;
+	}
+	
+	// 包装长注释
+	private wrapComment(comment: string, level: number, indentSize: number): string[] {
+		const maxLength = this.settings.maxLineLength - (level * indentSize);
+		const prefix = '--';
+		const content = comment.substring(2).trim();
+		
+		if (content.length <= maxLength - prefix.length) {
+			return [this.indent(comment, level, indentSize)];
+		}
+		
+		const words = content.split(' ');
+		const lines = [];
+		let currentLine = prefix + ' ';
+		
+		for (const word of words) {
+			if ((currentLine + word).length <= maxLength) {
+				currentLine += word + ' ';
+			} else {
+				lines.push(this.indent(currentLine.trim(), level, indentSize));
+				currentLine = prefix + ' ' + word + ' ';
+			}
+		}
+		
+		if (currentLine.trim() !== prefix) {
+			lines.push(this.indent(currentLine.trim(), level, indentSize));
+		}
+		
+		return lines;
+	}
+	
+	// 增强的后处理格式化
+	private enhancedPostProcessing(code: string): string {
 		let processed = code;
 		
 		// 确保操作符周围有适当的空格
@@ -584,20 +1755,104 @@ export default class ASN1Plugin extends Plugin {
 		// 处理逗号后的空格
 		processed = processed.replace(/,(\S)/g, ', $1');
 		
-		// 处理大括号、方括号、圆括号周围的空格
-		processed = processed.replace(/\{\s+/g, '{ ');
-		processed = processed.replace(/\s+\}/g, ' }');
-		processed = processed.replace(/\[\s+/g, '[');
-		processed = processed.replace(/\s+\]/g, ']');
+		// 处理大括号的格式
+		processed = processed.replace(/\{\s+/g, '{');
+		processed = processed.replace(/\s+\}/g, '}');
 		
-		// 移除多余的空行
-		processed = processed.replace(/\n\s*\n\s*\n/g, '\n\n');
+		// 处理 OPTIONAL 和 DEFAULT 的格式
+		processed = processed.replace(/\s+OPTIONAL/g, ' OPTIONAL');
+		processed = processed.replace(/\s+DEFAULT/g, ' DEFAULT');
+		
+		// 处理枚举值的格式
+		processed = processed.replace(/(\w+)\s*\((\d+)\)/g, '$1($2)');
+		
+		// 处理标签的格式
+		processed = processed.replace(/\[\s*(\d+)\s*\]/g, '[$1]');
+		processed = processed.replace(/\[\s*(APPLICATION|UNIVERSAL|PRIVATE|CONTEXT)\s+(\d+)\s*\]/g, '[$1 $2]');
+		
+		// 处理 SEQUENCE OF、SET OF 的格式
+		processed = processed.replace(/SEQUENCE\s+OF/g, 'SEQUENCE OF');
+		processed = processed.replace(/SET\s+OF/g, 'SET OF');
+		
+		// 确保关键字前后有适当的空格
+		processed = processed.replace(/(\w)IMPLICIT/g, '$1 IMPLICIT');
+		processed = processed.replace(/(\w)EXPLICIT/g, '$1 EXPLICIT');
+		processed = processed.replace(/IMPLICIT(\w)/g, 'IMPLICIT $1');
+		processed = processed.replace(/EXPLICIT(\w)/g, 'EXPLICIT $1');
+		
+		// 确保大括号后面换行格式正确
+		processed = processed.replace(/\{\s*\n\s*\n/g, '{\n');
+		processed = processed.replace(/\}\s*\n\s*\n\s*(\w)/g, '}\n\n$1');
+		
+		// 在模块定义后确保有空行
+		processed = processed.replace(/(DEFINITIONS\s+.*::=\s+BEGIN)\n/g, '$1\n\n');
+		
+		// 在 END 前确保有空行
+		processed = processed.replace(/\n(\s*)END\s*$/gm, '\n\n$1END');
 		
 		return processed;
 	}
 
+	// 设置全局自动格式化功能 - 全新实现
+	setupGlobalAutoFormatting() {
+		console.log('Setting up global auto formatting...');
+		
+		// 监听所有编辑器事件
+		this.registerEvent(
+			this.app.workspace.on('editor-change', (editor: Editor) => {
+				this.handleEditorChange(editor);
+			})
+		);
+		
+		console.log('Global auto formatting setup complete');
+	}
+	
+	// 处理编辑器内容变化
+	handleEditorChange(editor: Editor) {
+		if (!editor) return;
+		
+		// 检查是否在ASN.1代码块中并启用了formatOnSave
+		if (this.settings.formatOnSave) {
+			const cursor = editor.getCursor();
+			if (cursor && this.isASN1CodeBlock(editor)) {
+				// 检查最后输入的字符
+				const currentLine = editor.getLine(cursor.line);
+				if (currentLine && cursor.ch > 0) {
+					const lastChar = currentLine.charAt(cursor.ch - 1);
+					
+					// 在输入特定字符后触发格式化
+					if (lastChar === '}' || lastChar === ';' || lastChar === ',' || lastChar === ')' || lastChar === ']') {
+						console.log('Trigger character detected:', lastChar);
+						setTimeout(() => {
+							if (this.isASN1CodeBlock(editor)) {
+								this.autoFormatCurrentBlock(editor);
+							}
+						}, 200);
+					}
+				}
+			}
+		}
+		
+		// 处理Enter键自动格式化
+		if (this.settings.autoFormatOnEnter) {
+			// 我们将在下一个tick中检查是否在ASN.1块中
+			setTimeout(() => {
+				if (this.isASN1CodeBlock(editor)) {
+					const cursor = editor.getCursor();
+					if (cursor && cursor.ch === 0 && cursor.line > 0) {
+						// 如果光标在行首且不是第一行，可能刚按了Enter
+						console.log('Detected potential Enter key press in ASN.1 block');
+						this.autoFormatCurrentBlock(editor);
+					}
+				}
+			}, 100);
+		}
+	}
+
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		// 应用自定义颜色
+		this.applyCustomColors();
 	}
 
 	async saveSettings() {
@@ -643,5 +1898,114 @@ class ASN1SettingTab extends PluginSettingTab {
 					this.plugin.settings.formatOnSave = value;
 					await this.plugin.saveSettings();
 				}));
+
+		new Setting(containerEl)
+			.setName('Max Line Length')
+			.setDesc('Maximum line length before wrapping (40-120 characters)')
+			.addSlider((slider: any) => slider
+				.setLimits(40, 120, 5)
+				.setValue(this.plugin.settings.maxLineLength)
+				.setDynamicTooltip()
+				.onChange(async (value: number) => {
+					this.plugin.settings.maxLineLength = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Auto Wrap Long Lines')
+			.setDesc('Automatically wrap long lines during formatting')
+			.addToggle((toggle: any) => toggle
+				.setValue(this.plugin.settings.autoWrapLongLines)
+				.onChange(async (value: boolean) => {
+					this.plugin.settings.autoWrapLongLines = value;
+					await this.plugin.saveSettings();
+				}));
+		
+		// 增强自动格式化设置分组
+		(containerEl as any).createEl('h3', {text: 'Auto Formatting'});
+		
+		new Setting(containerEl)
+			.setName('Auto Format on Exit')
+			.setDesc('Automatically format ASN.1 code when leaving the code block')
+			.addToggle((toggle: any) => toggle
+				.setValue(this.plugin.settings.autoFormatOnExit)
+				.onChange(async (value: boolean) => {
+					this.plugin.settings.autoFormatOnExit = value;
+					await this.plugin.saveSettings();
+					// 重新设置自动格式化，使更改立即生效
+					const activeView = this.app.workspace.getActiveViewOfType('markdown' as any);
+					if (activeView && (activeView as any).editor) {
+						this.plugin.setupAutoFormatting((activeView as any).editor);
+					}
+				}));
+		
+		new Setting(containerEl)
+			.setName('Auto Format on Enter')
+			.setDesc('Automatically format ASN.1 code when pressing Enter key in code block')
+			.addToggle((toggle: any) => toggle
+				.setValue(this.plugin.settings.autoFormatOnEnter)
+				.onChange(async (value: boolean) => {
+					this.plugin.settings.autoFormatOnEnter = value;
+					await this.plugin.saveSettings();
+					// 重新设置自动格式化，使更改立即生效
+					const activeView = this.app.workspace.getActiveViewOfType('markdown' as any);
+					if (activeView && (activeView as any).editor) {
+						this.plugin.setupAutoFormatting((activeView as any).editor);
+					}
+				}));
+
+		// 颜色设置分组
+		(containerEl as any).createEl('h3', {text: 'Color Settings'});
+		
+		// 亮色主题颜色设置
+		(containerEl as any).createEl('h4', {text: 'Light Theme Colors'});
+		this.createColorSettings(containerEl, 'colors', 'Light theme');
+		
+		// 暗色主题颜色设置
+		(containerEl as any).createEl('h4', {text: 'Dark Theme Colors'});
+		this.createColorSettings(containerEl, 'darkColors', 'Dark theme');
+		
+		// 重置按钮
+		new Setting(containerEl)
+			.setName('Reset Colors')
+			.setDesc('Reset all colors to default values')
+			.addButton((button: any) => button
+				.setButtonText('Reset to Defaults')
+				.setCta()
+				.onClick(async () => {
+					this.plugin.settings.colors = {...DEFAULT_SETTINGS.colors};
+					this.plugin.settings.darkColors = {...DEFAULT_SETTINGS.darkColors};
+					await this.plugin.saveSettings();
+					this.plugin.applyCustomColors();
+					this.display(); // 重新渲染设置面板
+				}));
+	}
+	
+	// 创建颜色设置项
+	createColorSettings(containerEl: HTMLElement, colorKey: 'colors' | 'darkColors', themeDesc: string) {
+		const colorTypes = [
+			{ key: 'keyword', name: 'Keywords', desc: `Color for ASN.1 keywords (${themeDesc})` },
+			{ key: 'string', name: 'Strings', desc: `Color for string literals (${themeDesc})` },
+			{ key: 'comment', name: 'Comments', desc: `Color for comments (${themeDesc})` },
+			{ key: 'number', name: 'Numbers', desc: `Color for numeric values (${themeDesc})` },
+			{ key: 'punctuation', name: 'Punctuation', desc: `Color for punctuation marks (${themeDesc})` },
+			{ key: 'variable', name: 'Variables', desc: `Color for variable names (${themeDesc})` },
+			{ key: 'oid', name: 'Object Identifiers', desc: `Color for object identifiers (${themeDesc})` },
+			{ key: 'tag', name: 'Tags', desc: `Color for ASN.1 tags (${themeDesc})` },
+			{ key: 'operator', name: 'Operators', desc: `Color for operators (${themeDesc})` }
+		];
+		
+		colorTypes.forEach(colorType => {
+			new Setting(containerEl)
+				.setName(colorType.name)
+				.setDesc(colorType.desc)
+				.addColorPicker((colorPicker: any) => colorPicker
+					.setValue(this.plugin.settings[colorKey][colorType.key as keyof typeof this.plugin.settings.colors])
+					.onChange(async (value: string) => {
+						(this.plugin.settings[colorKey] as any)[colorType.key] = value;
+						await this.plugin.saveSettings();
+						this.plugin.applyCustomColors();
+					}));
+		});
 	}
 }
