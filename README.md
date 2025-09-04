@@ -15,22 +15,11 @@
 
 - ⚡ **保存时自动格式化** - 可配置的保存时自动格式化功能
 
-- 🎛️ **可自定义缩进大小** - 支持 1-8 个空格的缩进设置
-
 - 🌙 **暗黑模式支持** - 完美适配 Obsidian 的明暗主题
-
-- 🔍 **错误处理** - 完善的错误处理和边界情况支持
-
   
 
 ## 🚀 安装方法
 
-### 从 Obsidian 社区插件安装（推荐）
-
-1. 打开 Obsidian 设置
-2. 导航到「社区插件」并禁用「安全模式」
-3. 点击「浏览」并搜索 "ASN.1 Syntax"
-4. 点击安装，然后启用插件
 
 ### 手动安装
 
@@ -287,3 +276,8 @@ npm test -- --coverage
 - [ASN.1 标准文档](https://www.itu.int/rec/T-REC-X.680-X.693/)
 - [Obsidian 插件开发文档](https://docs.obsidian.md/)
 - [TypeScript 文档](https://www.typescriptlang.org/docs/)
+
+## 赏口饭
+* 支付宝<img width="554" height="648" alt="image" src="https://github.com/user-attachments/assets/ffd269ef-0eaa-4dd0-8e8d-45320428a2ad" />
+* 微信<img width="389" height="377" alt="image" src="https://github.com/user-attachments/assets/1989bd76-e989-4559-9e54-ecc8fabfd51c" />
+
