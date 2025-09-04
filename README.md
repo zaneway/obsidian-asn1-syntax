@@ -278,6 +278,7 @@ npm test -- --coverage
 - [TypeScript 文档](https://www.typescriptlang.org/docs/)
 
 ## 赏口饭
-* 支付宝<img width="554" height="648" alt="image" src="https://github.com/user-attachments/assets/ffd269ef-0eaa-4dd0-8e8d-45320428a2ad" />
+* 支付宝<img width="467" height="582" alt="image" src="https://github.com/user-attachments/assets/cb8d9d82-a3ce-47be-8da8-71781870b1dd" />
+
 * 微信<img width="389" height="377" alt="image" src="https://github.com/user-attachments/assets/1989bd76-e989-4559-9e54-ecc8fabfd51c" />
 
