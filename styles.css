@@ -1,0 +1,109 @@
+/* ASN.1语法高亮样式 */
+
+/* 代码块样式 */
+pre[class*="language-asn1"],
+code[class*="language-asn1"] {
+  font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+  font-size: 1em;
+  text-align: left;
+  white-space: pre;
+  word-spacing: normal;
+  word-break: normal;
+  word-wrap: normal;
+  line-height: 1.5;
+  tab-size: 4;
+  hyphens: none;
+}
+
+/* 关键字 */
+.asn1-keyword {
+  color: #07a;
+  font-weight: bold;
+}
+
+/* 字符串 */
+.asn1-string {
+  color: #690;
+}
+
+/* 注释 */
+.asn1-comment {
+  color: #999;
+  font-style: italic;
+}
+
+/* 数字 */
+.asn1-number {
+  color: #905;
+}
+
+/* 标点符号 */
+.asn1-punctuation {
+  color: #999;
+}
+
+/* 变量名 */
+.asn1-variable {
+  color: #DD4A68;
+}
+
+/* 对象标识符 */
+.asn1-oid {
+  color: #8E44AD;
+  font-weight: bold;
+}
+
+/* 标签 */
+.asn1-tag {
+  color: #E67E22;
+  font-weight: bold;
+}
+
+/* 操作符 */
+.asn1-operator {
+  color: #2C3E50;
+  font-weight: bold;
+}
+
+/* 暗黑模式适配 */
+.theme-dark pre[class*="language-asn1"],
+.theme-dark code[class*="language-asn1"] {
+  background: #282c34;
+  color: #abb2bf;
+}
+
+.theme-dark .asn1-keyword {
+  color: #c678dd;
+}
+
+.theme-dark .asn1-string {
+  color: #98c379;
+}
+
+.theme-dark .asn1-comment {
+  color: #5c6370;
+}
+
+.theme-dark .asn1-number {
+  color: #d19a66;
+}
+
+.theme-dark .asn1-punctuation {
+  color: #abb2bf;
+}
+
+.theme-dark .asn1-variable {
+  color: #e06c75;
+}
+
+.theme-dark .asn1-oid {
+  color: #BB86FC;
+}
+
+.theme-dark .asn1-tag {
+  color: #F39C12;
+}
+
+.theme-dark .asn1-operator {
+  color: #56B6C2;
+}

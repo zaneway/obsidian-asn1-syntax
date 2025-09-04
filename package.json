@@ -1,0 +1,57 @@
+{
+  "name": "obsidian-asn1-syntax",
+  "version": "1.0.0",
+  "description": "ASN.1 syntax highlighting and formatting for Obsidian",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production",
+    "typecheck": "tsc --noEmit --skipLibCheck",
+    "version": "node version-bump.mjs && git add manifest.json versions.json",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix"
+  },
+  "keywords": [
+    "obsidian",
+    "plugin",
+    "asn1",
+    "syntax",
+    "highlighting",
+    "formatting",
+    "markdown",
+    "codemirror"
+  ],
+  "author": "ASN.1 Plugin Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/obsidian-asn1-syntax.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/obsidian-asn1-syntax/issues"
+  },
+  "homepage": "https://github.com/your-username/obsidian-asn1-syntax#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^5.17.0",
+    "@types/jest": "^27.5.2",
+    "@types/node": "^16.11.6",
+    "@typescript-eslint/eslint-plugin": "^5.2.0",
+    "@typescript-eslint/parser": "^5.2.0",
+    "builtin-modules": "^3.2.0",
+    "esbuild": "0.13.12",
+    "eslint": "^8.0.0",
+    "jest": "^27.5.1",
+    "jsdom": "^19.0.0",
+    "obsidian": "^0.12.0",
+    "ts-jest": "^27.1.5",
+    "typescript": "4.4.4"
+  },
+  "dependencies": {
+    "codemirror": "^5.65.2"
+  }
+}
