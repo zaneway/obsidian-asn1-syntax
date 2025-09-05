@@ -2,6 +2,188 @@ import { Plugin, MarkdownView, PluginSettingTab, App, Setting, Editor, EditorPos
 // import * as CodeMirror from 'codemirror';
 // import 'codemirror/mode/clike/clike';
 
+// 国际化接口
+interface I18nStrings {
+	// 设置界面
+	settingsTitle: string;
+	indentSize: string;
+	indentSizeDesc: string;
+	formatOnSave: string;
+	formatOnSaveDesc: string;
+	maxLineLength: string;
+	maxLineLengthDesc: string;
+	autoWrapLongLines: string;
+	autoWrapLongLinesDesc: string;
+	autoFormatting: string;
+	autoFormatOnExit: string;
+	autoFormatOnExitDesc: string;
+	autoFormatOnEnter: string;
+	autoFormatOnEnterDesc: string;
+	customKeywords: string;
+	customBasicTypes: string;
+	customBasicTypesDesc: string;
+	colorSettings: string;
+	lightThemeColors: string;
+	darkThemeColors: string;
+	resetColors: string;
+	resetColorsDesc: string;
+	resetToDefaults: string;
+	
+	// 颜色类型
+	keywords: string;
+	strings: string;
+	comments: string;
+	numbers: string;
+	punctuation: string;
+	variables: string;
+	objectIdentifiers: string;
+	tags: string;
+	operators: string;
+	customKeywordsColor: string; // 添加自定义关键字颜色的翻译
+	
+	// 命令
+	formatASN1: string;
+	autoFormatASN1: string;
+	testASN1AutoFormat: string;
+}
+
+// 中文翻译
+const zhCN: I18nStrings = {
+	settingsTitle: 'ASN.1 语法设置',
+	indentSize: '缩进大小',
+	indentSizeDesc: '每个缩进级别使用的空格数',
+	formatOnSave: '保存时格式化',
+	formatOnSaveDesc: '保存时自动格式化 ASN.1 代码块',
+	maxLineLength: '最大行长度',
+	maxLineLengthDesc: '换行前的最大行长度（40-120 字符）',
+	autoWrapLongLines: '自动换行长行',
+	autoWrapLongLinesDesc: '格式化时自动换行长行',
+	autoFormatting: '自动格式化',
+	autoFormatOnExit: '离开时自动格式化',
+	autoFormatOnExitDesc: '离开代码块时自动格式化 ASN.1 代码',
+	autoFormatOnEnter: '按Enter时自动格式化',
+	autoFormatOnEnterDesc: '在代码块中按Enter键时自动格式化 ASN.1 代码',
+	customKeywords: '自定义关键字',
+	customBasicTypes: '自定义基本类型',
+	customBasicTypesDesc: '添加用于语法高亮的自定义基本类型（逗号分隔，例如："MyType, CustomString, SpecialInt"）',
+	colorSettings: '颜色设置',
+	lightThemeColors: '亮色主题颜色',
+	darkThemeColors: '暗色主题颜色',
+	resetColors: '重置颜色',
+	resetColorsDesc: '将所有颜色重置为默认值',
+	resetToDefaults: '重置为默认值',
+	
+	keywords: '关键字',
+	strings: '字符串',
+	comments: '注释',
+	numbers: '数字',
+	punctuation: '标点符号',
+	variables: '变量',
+	objectIdentifiers: '对象标识符',
+	tags: '标签',
+	operators: '操作符',
+	customKeywordsColor: '自定义关键字', // 添加自定义关键字颜色的中文翻译
+	
+	formatASN1: '格式化 ASN.1',
+	autoFormatASN1: '自动格式化 ASN.1（实时）',
+	testASN1AutoFormat: '测试 ASN.1 自动格式化（当前块）'
+};
+
+// 英文翻译
+const enUS: I18nStrings = {
+	settingsTitle: 'ASN.1 Syntax Settings',
+	indentSize: 'Indent Size',
+	indentSizeDesc: 'Number of spaces to use for each indentation level',
+	formatOnSave: 'Format on Save',
+	formatOnSaveDesc: 'Automatically format ASN.1 code blocks when saving',
+	maxLineLength: 'Max Line Length',
+	maxLineLengthDesc: 'Maximum line length before wrapping (40-120 characters)',
+	autoWrapLongLines: 'Auto Wrap Long Lines',
+	autoWrapLongLinesDesc: 'Automatically wrap long lines during formatting',
+	autoFormatting: 'Auto Formatting',
+	autoFormatOnExit: 'Auto Format on Exit',
+	autoFormatOnExitDesc: 'Automatically format ASN.1 code when leaving the code block',
+	autoFormatOnEnter: 'Auto Format on Enter',
+	autoFormatOnEnterDesc: 'Automatically format ASN.1 code when pressing Enter key in code block',
+	customKeywords: 'Custom Keywords',
+	customBasicTypes: 'Custom Basic Types',
+	customBasicTypesDesc: 'Add custom basic types for syntax highlighting (comma-separated, e.g., "MyType, CustomString, SpecialInt")',
+	colorSettings: 'Color Settings',
+	lightThemeColors: 'Light Theme Colors',
+	darkThemeColors: 'Dark Theme Colors',
+	resetColors: 'Reset Colors',
+	resetColorsDesc: 'Reset all colors to default values',
+	resetToDefaults: 'Reset to Defaults',
+	
+	keywords: 'Keywords',
+	strings: 'Strings',
+	comments: 'Comments',
+	numbers: 'Numbers',
+	punctuation: 'Punctuation',
+	variables: 'Variables',
+	objectIdentifiers: 'Object Identifiers',
+	tags: 'Tags',
+	operators: 'Operators',
+	customKeywordsColor: 'Custom Keywords', // 添加自定义关键字颜色的英文翻译
+	
+	formatASN1: 'Format ASN.1',
+	autoFormatASN1: 'Auto Format ASN.1 (Real-time)',
+	testASN1AutoFormat: 'Test ASN.1 Auto Format (Current Block)'
+};
+
+// 国际化管理器
+class I18nManager {
+	private currentLanguage: string = 'zh-CN';
+	private strings: I18nStrings = zhCN;
+	
+	constructor(app: App) {
+		this.detectLanguage(app);
+	}
+	
+	// 检测Obsidian的语言设置
+	private detectLanguage(app: App) {
+		// 尝试从Obsidian的配置中获取语言设置
+		const locale = (app as any).vault?.config?.locale || 
+					   (app as any).settings?.locale || 
+					   navigator.language || 
+					   'zh-CN';
+		
+		console.log('Detected Obsidian locale:', locale);
+		
+		// 根据语言代码设置对应的翻译
+		if (locale.startsWith('zh')) {
+			this.currentLanguage = 'zh-CN';
+			this.strings = zhCN;
+		} else {
+			this.currentLanguage = 'en-US';
+			this.strings = enUS;
+		}
+		
+		console.log('Using language:', this.currentLanguage);
+	}
+	
+	// 获取翻译文本
+	t(key: keyof I18nStrings): string {
+		return this.strings[key] || key;
+	}
+	
+	// 获取当前语言
+	getCurrentLanguage(): string {
+		return this.currentLanguage;
+	}
+	
+	// 手动设置语言
+	setLanguage(language: string) {
+		if (language === 'zh-CN') {
+			this.currentLanguage = 'zh-CN';
+			this.strings = zhCN;
+		} else {
+			this.currentLanguage = 'en-US';
+			this.strings = enUS;
+		}
+	}
+}
+
 // ASN.1令牌接口
 interface ASN1Token {
 	type: 'module-definition' | 'begin' | 'end' | 'type-name' | 'type-definition' | 'opening-brace' | 'field' | 'closing-brace' | 'comment' | 'other';
@@ -30,6 +212,8 @@ interface ASN1PluginSettings {
 	// 新增：增强自动格式化选项
 	autoFormatOnExit: boolean; // 离开代码块时自动格式化
 	autoFormatOnEnter: boolean; // 按Enter键时自动格式化
+	// 自定义关键字设置
+	customKeywords: string; // 用户自定义的基本类型关键字，用逗号分隔
 	// 颜色设置
 	colors: {
 		keyword: string;
@@ -41,6 +225,8 @@ interface ASN1PluginSettings {
 		oid: string;
 		tag: string;
 		operator: string;
+		// 自定义关键字颜色
+		customKeyword: string;
 	};
 	darkColors: {
 		keyword: string;
@@ -52,6 +238,8 @@ interface ASN1PluginSettings {
 		oid: string;
 		tag: string;
 		operator: string;
+		// 自定义关键字颜色
+		customKeyword: string;
 	};
 }
 
@@ -64,6 +252,8 @@ const DEFAULT_SETTINGS: ASN1PluginSettings = {
 	// 新增默认设置
 	autoFormatOnExit: true,
 	autoFormatOnEnter: true,
+	// 自定义关键字设置
+	customKeywords: '', // 默认为空，用户可添加自定义基本类型
 	// 默认亮色主题颜色
 	colors: {
 		keyword: '#07a',
@@ -74,7 +264,9 @@ const DEFAULT_SETTINGS: ASN1PluginSettings = {
 		variable: '#DD4A68',
 		oid: '#8E44AD',
 		tag: '#E67E22',
-		operator: '#2C3E50'
+		operator: '#2C3E50',
+		// 自定义关键字颜色
+		customKeyword: '#07a'
 	},
 	// 默认暗色主题颜色
 	darkColors: {
@@ -86,17 +278,23 @@ const DEFAULT_SETTINGS: ASN1PluginSettings = {
 		variable: '#e06c75',
 		oid: '#BB86FC',
 		tag: '#F39C12',
-		operator: '#56B6C2'
+		operator: '#56B6C2',
+		// 自定义关键字颜色
+		customKeyword: '#c678dd'
 	}
 };
 
 export default class ASN1Plugin extends Plugin {
 	settings: ASN1PluginSettings;
 	private formattingInProgress: boolean = false;
+	private i18n: I18nManager;
 
 	async onload() {
 		try {
 			console.log('Loading ASN.1 plugin');
+
+			// 初始化国际化管理器
+			this.i18n = new I18nManager(this.app);
 
 			// 加载设置
 			await this.loadSettings();
@@ -124,7 +322,7 @@ export default class ASN1Plugin extends Plugin {
 			// 添加格式化命令
 			this.addCommand({
 				id: 'format-asn1',
-				name: 'Format ASN.1',
+				name: this.i18n.t('formatASN1'),
 				editorCallback: (editor: Editor) => {
 					try {
 						this.formatASN1(editor);
@@ -137,7 +335,7 @@ export default class ASN1Plugin extends Plugin {
 			// 添加实时格式化命令
 			this.addCommand({
 				id: 'auto-format-asn1',
-				name: 'Auto Format ASN.1 (Real-time)',
+				name: this.i18n.t('autoFormatASN1'),
 				editorCallback: (editor: Editor) => {
 					try {
 						this.toggleAutoFormatting(editor);
@@ -150,7 +348,7 @@ export default class ASN1Plugin extends Plugin {
 			// 添加测试命令
 			this.addCommand({
 				id: 'test-asn1-auto-format',
-				name: 'Test ASN.1 Auto Format (Current Block)',
+				name: this.i18n.t('testASN1AutoFormat'),
 				editorCallback: (editor: Editor) => {
 					try {
 						if (this.isASN1CodeBlock(editor)) {
@@ -389,7 +587,7 @@ export default class ASN1Plugin extends Plugin {
 			for (let i = searchStart; i <= searchEnd; i++) {
 				try {
 					const line = editor.getLine(i);
-					if (line && line.trim().startsWith('```asn1')) {
+					if (line && line.trim().startsWith('``asn1')) {
 						// 找到ASN.1代码块开始，查找结束位置
 						let endLine = i + 1;
 						while (endLine < lineCount) {
@@ -564,6 +762,12 @@ export default class ASN1Plugin extends Plugin {
 		const lightColors = this.settings.colors;
 		const darkColors = this.settings.darkColors;
 		
+		// 确保自定义关键字颜色被正确设置
+		console.log('应用自定义颜色设置:');
+		console.log('自定义关键字颜色 (亮色):', lightColors.customKeyword);
+		console.log('自定义关键字颜色 (暗色):', darkColors.customKeyword);
+		
+		// 使用更高的CSS优先级确保自定义关键字颜色被正确应用
 		style.textContent = `
 			/* ASN.1 自定义颜色 - 亮色主题 */
 			.asn1-keyword { color: ${lightColors.keyword} !important; }
@@ -575,6 +779,8 @@ export default class ASN1Plugin extends Plugin {
 			.asn1-oid { color: ${lightColors.oid} !important; }
 			.asn1-tag { color: ${lightColors.tag} !important; }
 			.asn1-operator { color: ${lightColors.operator} !important; }
+			/* 增加CSS选择器优先级，确保自定义关键字颜色正确显示 */
+			code .asn1-custom-keyword, pre .asn1-custom-keyword, .asn1-custom-keyword { color: ${lightColors.customKeyword} !important; }
 			
 			/* ASN.1 自定义颜色 - 暗色主题 */
 			.theme-dark .asn1-keyword { color: ${darkColors.keyword} !important; }
@@ -586,9 +792,12 @@ export default class ASN1Plugin extends Plugin {
 			.theme-dark .asn1-oid { color: ${darkColors.oid} !important; }
 			.theme-dark .asn1-tag { color: ${darkColors.tag} !important; }
 			.theme-dark .asn1-operator { color: ${darkColors.operator} !important; }
+			/* 增加CSS选择器优先级，确保暗色主题下自定义关键字颜色正确显示 */
+			.theme-dark code .asn1-custom-keyword, .theme-dark pre .asn1-custom-keyword, .theme-dark .asn1-custom-keyword { color: ${darkColors.customKeyword} !important; }
 		`;
 		
 		document.head.appendChild(style);
+		console.log('自定义颜色样式已应用');
 	}
 	
 	onunload() {
@@ -628,7 +837,7 @@ export default class ASN1Plugin extends Plugin {
 			}
 			
 			// 关键字列表 - 与语法模式保持一致
-			const keywords = [
+			const baseKeywords = [
 				// 基本类型
 				'BOOLEAN', 'INTEGER', 'BIT', 'OCTET', 'NULL', 'OBJECT', 'REAL',
 				'ENUMERATED', 'EMBEDDED', 'UTF8String', 'RELATIVE-OID',
@@ -668,6 +877,14 @@ export default class ASN1Plugin extends Plugin {
 				'PDV', 'EXTERNAL', 'BY', 'OF', 'IDENTIFIER'
 			];
 			
+			// 合并用户自定义关键字
+			const customKeywords = this.settings.customKeywords
+				.split(',')
+				.map(k => k.trim())
+				.filter(k => k.length > 0);
+			
+			const keywords = [...baseKeywords, ...customKeywords];
+			
 			// 转义HTML字符
 			function escapeHtml(unsafe: string): string {
 				try {
@@ -690,8 +907,8 @@ export default class ASN1Plugin extends Plugin {
 				// 高亮多行注释 (-* ... *-)
 				highlightedCode = highlightedCode.replace(/-\*[\s\S]*?\*-/g, '<span class="asn1-comment">$&</span>');
 				
-				// 高亮单行注释 (--)
-				highlightedCode = highlightedCode.replace(/--.*$/gm, '<span class="asn1-comment">$&</span>');
+				// 高亮单行注释 (--) - 避免匹配HTML class属性
+				highlightedCode = highlightedCode.replace(/(?<!<[^>]*class="[^"]*)\b--.*$/gm, '<span class="asn1-comment">$&</span>');
 				
 				// 高亮字符串 (双引号)
 				highlightedCode = highlightedCode.replace(/"(?:[^"\\\\]|\\\\.)*"/g, '<span class="asn1-string">$&</span>');
@@ -711,16 +928,67 @@ export default class ASN1Plugin extends Plugin {
 				// 高亮范围操作符 (...)
 				highlightedCode = highlightedCode.replace(/\.\.\./g, '<span class="asn1-operator">$&</span>');
 				
-				// 高亮关键字 (必须在其他高亮之后执行，避免覆盖已高亮的内容)
-				for (const keyword of keywords) {
+				// 高亮自定义关键字（先于基础关键字，避免被覆盖）
+				for (const customKeyword of customKeywords) {
 					try {
-						// 使用更精确的正则表达式，避免在已高亮的span标签内匹配
-						const escapedKeyword = keyword.replace(/[-\[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+						const escapedKeyword = customKeyword.replace(/[-\[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+						// 使用兼容ES2018以下版本的正则表达式方式
 						const regex = new RegExp(
-							`(?<!<[^>]*>)\\b${escapedKeyword}\\b(?![^<]*</span>)`,
+							`\\b${escapedKeyword}\\b`,
 							'gi'
 						);
-						highlightedCode = highlightedCode.replace(regex, '<span class="asn1-keyword">$&</span>');
+						// 确保自定义关键字使用正确的类名和样式
+						highlightedCode = highlightedCode.replace(regex, '<span class="asn1-custom-keyword">$&</span>');
+						// 添加日志以便调试
+						console.log(`Applied custom keyword highlighting for "${customKeyword}" with color: ${this.settings.colors.customKeyword}`);
+					} catch (error) {
+						console.warn(`Error highlighting custom keyword "${customKeyword}":`, error);
+					}
+				}
+				
+				// 高亮基础关键字
+				for (const keyword of baseKeywords) {
+					try {
+						// 使用兼容ES2018以下版本的正则表达式
+						const escapedKeyword = keyword.replace(/[-\[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+						const regex = new RegExp(
+							`\\b${escapedKeyword}\\b`,
+							'gi'
+						);
+						
+						// 使用临时字符串进行替换，避免覆盖已高亮的自定义关键字
+						let tempCode = '';
+						let lastIndex = 0;
+						let match;
+						
+						// 重置正则表达式的lastIndex
+						regex.lastIndex = 0;
+						
+						while ((match = regex.exec(highlightedCode)) !== null) {
+							const matchStart = match.index;
+							const matchEnd = matchStart + match[0].length;
+							
+							// 检查匹配是否在span标签内
+							let isInSpan = false;
+							let spanStart = highlightedCode.lastIndexOf('<span', matchStart);
+							if (spanStart !== -1) {
+								let spanEnd = highlightedCode.indexOf('</span>', spanStart);
+								if (spanEnd !== -1 && spanEnd > matchEnd) {
+									isInSpan = true;
+								}
+							}
+							
+							// 如果不在span标签内，则进行替换
+							if (!isInSpan) {
+								tempCode += highlightedCode.substring(lastIndex, matchStart);
+								tempCode += `<span class="asn1-keyword">${match[0]}</span>`;
+								lastIndex = matchEnd;
+							}
+						}
+						
+						// 添加剩余部分
+						tempCode += highlightedCode.substring(lastIndex);
+						highlightedCode = tempCode;
 					} catch (error) {
 						console.warn(`Error highlighting keyword "${keyword}":`, error);
 					}
@@ -995,7 +1263,7 @@ export default class ASN1Plugin extends Plugin {
 		// 将 "}\n+<def>" 统一成 "}\n\n\n<def>"
 		code = code.replace(/\}\n+(?=\s*\w+\s*::=)/g, '}\n\n\n');
 		// 情况二：两个以关键字开头的定义直接相邻（极少见，但处理一下）
-		code = code.replace(/(\w+\s*::=.*?)\n+(?=\s*\w+\s*::=)/gs, (_m, prev) => `${prev}\n\n\n`);
+		code = code.replace(/(\w+\s*::=.*?[\s\S]*?)\n+(?=\s*\w+\s*::=)/g, (_m, prev) => `${prev}\n\n\n`);
 		return code;
 	}
 
@@ -1616,65 +1884,7 @@ export default class ASN1Plugin extends Plugin {
 		return result.join('\n');
 	}
 	
-	// 智能分割字段 - 改进版本，更好地处理复杂字段
-	private splitFields(fieldsStr: string): string[] {
-		console.log('Splitting fields from:', fieldsStr);
-		
-		// 移除首尾空格和可能的闭合大括号
-		fieldsStr = fieldsStr.replace(/^\s*\{\s*/, '').replace(/\s*\}\s*$/, '').trim();
-		
-		const fields = [];
-		let current = '';
-		let braceCount = 0;
-		let parenCount = 0;
-		let bracketCount = 0;
-		let inString = false;
-		
-		// 添加安全计数器，防止无限循环
-		let safetyCounter = 0;
-		const maxIterations = fieldsStr.length * 2; // 设置最大迭代次数
-		
-		for (let i = 0; i < fieldsStr.length && safetyCounter < maxIterations; i++, safetyCounter++) {
-			const char = fieldsStr[i];
-			const prevChar = i > 0 ? fieldsStr[i - 1] : '';
-			
-			// 处理字符串
-			if (char === '"' && prevChar !== '\\') {
-				inString = !inString;
-			}
-			
-			if (!inString) {
-				// 跟踪嵌套层级
-				if (char === '{') braceCount++;
-				else if (char === '}') braceCount--;
-				else if (char === '(') parenCount++;
-				else if (char === ')') parenCount--;
-				else if (char === '[') bracketCount++;
-				else if (char === ']') bracketCount--;
-				
-				// 在所有嵌套都关闭的情况下，逗号是字段分隔符
-				else if (char === ',' && braceCount === 0 && parenCount === 0 && bracketCount === 0) {
-					const fieldContent = current.trim();
-					if (fieldContent) {
-						fields.push(fieldContent + ',');
-					}
-					current = '';
-					continue;
-				}
-			}
-			
-			current += char;
-		}
-		
-		// 添加最后一个字段（不带逗号）
-		const lastField = current.trim();
-		if (lastField) {
-			fields.push(lastField);
-		}
-		
-		console.log('Split fields result:', fields);
-		return fields;
-	}
+	// 这里之前有一个重复的splitFields函数实现，已被删除
 	
 	// 强制分割字段 - 专门用于单行结构，修复缩进问题
 	private forceSplitFields(fieldsStr: string): string[] {
@@ -1860,47 +2070,7 @@ export default class ASN1Plugin extends Plugin {
 		return processed;
 	}
 	
-	// 强制分割枚举值 - 修复缩进问题
-	private forceSplitEnumValues(enumStr: string): string[] {
-		console.log('Force splitting enum values:', enumStr);
-		
-		const values = [];
-		let current = '';
-		let parenCount = 0;
-		
-		enumStr = enumStr.trim();
-		const indentStr = ' '.repeat(this.settings.indentSize); // 使用用户设置的缩进
-		
-		// 添加安全计数器，防止无限循环
-		let safetyCounter = 0;
-		const maxIterations = enumStr.length * 2; // 设置最大迭代次数
-		
-		for (let i = 0; i < enumStr.length && safetyCounter < maxIterations; i++, safetyCounter++) {
-			const char = enumStr[i];
-			
-			if (char === '(') parenCount++;
-			else if (char === ')') parenCount--;
-			else if (char === ',' && parenCount === 0) {
-				const value = current.trim();
-				if (value) {
-					values.push(indentStr + value + ','); // 使用设置的缩进
-				}
-				current = '';
-				continue;
-			}
-			
-			current += char;
-		}
-		
-		// 添加最后一个值（不带逗号）
-		const lastValue = current.trim();
-		if (lastValue) {
-			values.push(indentStr + lastValue); // 使用设置的缩进，不加逗号
-		}
-		
-		console.log('Force split enum values result:', values);
-		return values;
-	}
+	// 这里之前有一个重复的forceSplitEnumValues函数实现，已被删除
 
 	// 格式化令牌
 	private formatTokens(tokens: ASN1Token[]): string {
@@ -2124,67 +2294,7 @@ export default class ASN1Plugin extends Plugin {
 		return fields;
 	}
 	
-	// 强制分割字段 - 用于处理嵌套结构
-	private forceSplitFields(fieldsStr: string): string[] {
-		console.log('Force splitting fields:', fieldsStr);
-		
-		const fields = [];
-		let current = '';
-		let braceCount = 0;
-		let parenCount = 0;
-		let bracketCount = 0;
-		let inString = false;
-		
-		// 清理输入字符串
-		fieldsStr = fieldsStr.trim();
-		
-		const indentStr = ' '.repeat(this.settings.indentSize); // 使用用户设置的缩进
-		
-		// 添加安全计数器，防止无限循环
-		let safetyCounter = 0;
-		const maxIterations = fieldsStr.length * 2; // 设置最大迭代次数
-		
-		for (let i = 0; i < fieldsStr.length && safetyCounter < maxIterations; i++, safetyCounter++) {
-			const char = fieldsStr[i];
-			const prevChar = i > 0 ? fieldsStr[i - 1] : '';
-			
-			// 处理字符串
-			if (char === '"' && prevChar !== '\\') {
-				inString = !inString;
-			}
-			
-			if (!inString) {
-				// 跟踪嵌套层级
-				if (char === '{') braceCount++;
-				else if (char === '}') braceCount--;
-				else if (char === '(') parenCount++;
-				else if (char === ')') parenCount--;
-				else if (char === '[') bracketCount++;
-				else if (char === ']') bracketCount--;
-				
-				// 在最外层遇到逗号时分割
-				else if (char === ',' && braceCount === 0 && parenCount === 0 && bracketCount === 0) {
-					const fieldContent = current.trim();
-					if (fieldContent) {
-						fields.push(indentStr + fieldContent + ','); // 使用设置的缩进
-					}
-					current = '';
-					continue;
-				}
-			}
-			
-			current += char;
-		}
-		
-		// 添加最后一个字段（不带逗号）
-		const lastField = current.trim();
-		if (lastField) {
-			fields.push(indentStr + lastField); // 使用设置的缩进，不加逗号
-		}
-		
-		console.log('Force split fields result:', fields);
-		return fields;
-	}
+	// 删除重复的forceSplitFields函数实现
 	
 	// 解析枚举值
 	private parseEnumValues(enumStr: string): ASN1Token[] {
@@ -2361,15 +2471,46 @@ class ASN1SettingTab extends PluginSettingTab {
 	display(): void {
 		const {containerEl} = this;
 
+		// 使用本地变量存储翻译，避免直接访问私有属性
+		const getTranslation = (key: string): string => {
+			// 使用一个映射表来替代直接访问i18n
+			const translations: Record<string, string> = {
+				'settingsTitle': 'ASN.1 语法设置',
+				'indentSize': '缩进大小',
+				'indentSizeDesc': '每个缩进级别使用的空格数',
+				'formatOnSave': '保存时格式化',
+				'formatOnSaveDesc': '保存时自动格式化 ASN.1 代码块',
+				'maxLineLength': '最大行长度',
+				'maxLineLengthDesc': '换行前的最大行长度（40-120个字符）',
+				'autoWrapLongLines': '自动换行长行',
+				'autoWrapLongLinesDesc': '格式化时自动换行长行',
+				'autoFormatting': '自动格式化',
+				'autoFormatOnExit': '退出时自动格式化',
+				'autoFormatOnExitDesc': '离开代码块时自动格式化 ASN.1 代码',
+				'autoFormatOnEnter': '按回车键时自动格式化',
+				'autoFormatOnEnterDesc': '在代码块中按回车键时自动格式化 ASN.1 代码',
+				'customKeywords': '自定义关键字',
+				'customBasicTypes': '自定义基本类型',
+				'customBasicTypesDesc': '添加用于语法高亮的自定义基本类型（逗号分隔，例如 "MyType, CustomString, SpecialInt"）',
+				'colorSettings': '颜色设置',
+				'lightThemeColors': '亮色主题颜色',
+				'darkThemeColors': '暗色主题颜色',
+				'resetColors': '重置颜色',
+				'resetColorsDesc': '将所有颜色重置为默认值',
+				'resetToDefaults': '重置为默认值'
+			};
+			return translations[key] || key;
+		};
+
 		// 清空容器
 		(containerEl as any).empty();
 
 		// 创建标题
-		(containerEl as any).createEl('h2', {text: 'ASN.1 Syntax Settings'});
+		(containerEl as any).createEl('h2', {text: getTranslation('settingsTitle')});
 
 		new Setting(containerEl)
-			.setName('Indent Size')
-			.setDesc('Number of spaces to use for each indentation level')
+			.setName(getTranslation('indentSize'))
+			.setDesc(getTranslation('indentSizeDesc'))
 			.addSlider((slider: any) => slider
 				.setLimits(1, 8, 1)
 				.setValue(this.plugin.settings.indentSize)
@@ -2380,8 +2521,8 @@ class ASN1SettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Format on Save')
-			.setDesc('Automatically format ASN.1 code blocks when saving')
+			.setName(getTranslation('formatOnSave'))
+			.setDesc(getTranslation('formatOnSaveDesc'))
 			.addToggle((toggle: any) => toggle
 				.setValue(this.plugin.settings.formatOnSave)
 				.onChange(async (value: boolean) => {
@@ -2390,8 +2531,8 @@ class ASN1SettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Max Line Length')
-			.setDesc('Maximum line length before wrapping (40-120 characters)')
+			.setName(getTranslation('maxLineLength'))
+			.setDesc(getTranslation('maxLineLengthDesc'))
 			.addSlider((slider: any) => slider
 				.setLimits(40, 120, 5)
 				.setValue(this.plugin.settings.maxLineLength)
@@ -2402,8 +2543,8 @@ class ASN1SettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Auto Wrap Long Lines')
-			.setDesc('Automatically wrap long lines during formatting')
+			.setName(getTranslation('autoWrapLongLines'))
+			.setDesc(getTranslation('autoWrapLongLinesDesc'))
 			.addToggle((toggle: any) => toggle
 				.setValue(this.plugin.settings.autoWrapLongLines)
 				.onChange(async (value: boolean) => {
@@ -2412,11 +2553,11 @@ class ASN1SettingTab extends PluginSettingTab {
 				}));
 		
 		// 增强自动格式化设置分组
-		(containerEl as any).createEl('h3', {text: 'Auto Formatting'});
+		(containerEl as any).createEl('h3', {text: getTranslation('autoFormatting')});
 		
 		new Setting(containerEl)
-			.setName('Auto Format on Exit')
-			.setDesc('Automatically format ASN.1 code when leaving the code block')
+			.setName(getTranslation('autoFormatOnExit'))
+			.setDesc(getTranslation('autoFormatOnExitDesc'))
 			.addToggle((toggle: any) => toggle
 				.setValue(this.plugin.settings.autoFormatOnExit)
 				.onChange(async (value: boolean) => {
@@ -2430,8 +2571,8 @@ class ASN1SettingTab extends PluginSettingTab {
 				}));
 		
 		new Setting(containerEl)
-			.setName('Auto Format on Enter')
-			.setDesc('Automatically format ASN.1 code when pressing Enter key in code block')
+			.setName(getTranslation('autoFormatOnEnter'))
+			.setDesc(getTranslation('autoFormatOnEnterDesc'))
 			.addToggle((toggle: any) => toggle
 				.setValue(this.plugin.settings.autoFormatOnEnter)
 				.onChange(async (value: boolean) => {
@@ -2444,23 +2585,37 @@ class ASN1SettingTab extends PluginSettingTab {
 					}
 				}));
 
+		// 自定义关键字设置分组
+		(containerEl as any).createEl('h3', {text: getTranslation('customKeywords')});
+		
+		new Setting(containerEl)
+			.setName(getTranslation('customBasicTypes'))
+			.setDesc(getTranslation('customBasicTypesDesc'))
+			.addText((text: any) => text
+				.setPlaceholder('MyType, CustomString, SpecialInt')
+				.setValue(this.plugin.settings.customKeywords)
+				.onChange(async (value: string) => {
+					this.plugin.settings.customKeywords = value;
+					await this.plugin.saveSettings();
+				}));
+
 		// 颜色设置分组
-		(containerEl as any).createEl('h3', {text: 'Color Settings'});
+		(containerEl as any).createEl('h3', {text: getTranslation('colorSettings')});
 		
 		// 亮色主题颜色设置
-		(containerEl as any).createEl('h4', {text: 'Light Theme Colors'});
-		this.createColorSettings(containerEl, 'colors', 'Light theme');
+		(containerEl as any).createEl('h4', {text: getTranslation('lightThemeColors')});
+		this.createColorSettings(containerEl, 'colors', getTranslation('lightThemeColors'));
 		
 		// 暗色主题颜色设置
-		(containerEl as any).createEl('h4', {text: 'Dark Theme Colors'});
-		this.createColorSettings(containerEl, 'darkColors', 'Dark theme');
+		(containerEl as any).createEl('h4', {text: getTranslation('darkThemeColors')});
+		this.createColorSettings(containerEl, 'darkColors', getTranslation('darkThemeColors'));
 		
 		// 重置按钮
 		new Setting(containerEl)
-			.setName('Reset Colors')
-			.setDesc('Reset all colors to default values')
+			.setName(getTranslation('resetColors'))
+			.setDesc(getTranslation('resetColorsDesc'))
 			.addButton((button: any) => button
-				.setButtonText('Reset to Defaults')
+				.setButtonText(getTranslation('resetToDefaults'))
 				.setCta()
 				.onClick(async () => {
 					this.plugin.settings.colors = {...DEFAULT_SETTINGS.colors};
@@ -2473,29 +2628,50 @@ class ASN1SettingTab extends PluginSettingTab {
 	
 	// 创建颜色设置项
 	createColorSettings(containerEl: HTMLElement, colorKey: 'colors' | 'darkColors', themeDesc: string) {
+		// 使用本地变量存储翻译，避免直接访问私有属性
+		const getTranslation = (key: string): string => {
+			// 使用一个映射表来替代直接访问i18n
+			const translations: Record<string, string> = {
+				'keywords': '关键字',
+				'strings': '字符串',
+				'comments': '注释',
+				'numbers': '数字',
+				'punctuation': '标点符号',
+				'variables': '变量',
+				'objectIdentifiers': '对象标识符',
+				'tags': '标签',
+				'operators': '操作符',
+				'customKeywordsColor': '自定义关键字'
+			};
+			return translations[key] || key;
+		};
+
 		const colorTypes = [
-			{ key: 'keyword', name: 'Keywords', desc: `Color for ASN.1 keywords (${themeDesc})` },
-			{ key: 'string', name: 'Strings', desc: `Color for string literals (${themeDesc})` },
-			{ key: 'comment', name: 'Comments', desc: `Color for comments (${themeDesc})` },
-			{ key: 'number', name: 'Numbers', desc: `Color for numeric values (${themeDesc})` },
-			{ key: 'punctuation', name: 'Punctuation', desc: `Color for punctuation marks (${themeDesc})` },
-			{ key: 'variable', name: 'Variables', desc: `Color for variable names (${themeDesc})` },
-			{ key: 'oid', name: 'Object Identifiers', desc: `Color for object identifiers (${themeDesc})` },
-			{ key: 'tag', name: 'Tags', desc: `Color for ASN.1 tags (${themeDesc})` },
-			{ key: 'operator', name: 'Operators', desc: `Color for operators (${themeDesc})` }
+			{ key: 'keyword', name: getTranslation('keywords'), desc: `${getTranslation('keywords')} (${themeDesc})` },
+			{ key: 'string', name: getTranslation('strings'), desc: `${getTranslation('strings')} (${themeDesc})` },
+			{ key: 'comment', name: getTranslation('comments'), desc: `${getTranslation('comments')} (${themeDesc})` },
+			{ key: 'number', name: getTranslation('numbers'), desc: `${getTranslation('numbers')} (${themeDesc})` },
+			{ key: 'punctuation', name: getTranslation('punctuation'), desc: `${getTranslation('punctuation')} (${themeDesc})` },
+			{ key: 'variable', name: getTranslation('variables'), desc: `${getTranslation('variables')} (${themeDesc})` },
+			{ key: 'oid', name: getTranslation('objectIdentifiers'), desc: `${getTranslation('objectIdentifiers')} (${themeDesc})` },
+			{ key: 'tag', name: getTranslation('tags'), desc: `${getTranslation('tags')} (${themeDesc})` },
+			{ key: 'operator', name: getTranslation('operators'), desc: `${getTranslation('operators')} (${themeDesc})` },
+			{ key: 'customKeyword', name: getTranslation('customKeywordsColor'), desc: `${getTranslation('customKeywordsColor')} (${themeDesc})` }
 		];
 		
 		colorTypes.forEach(colorType => {
-			new Setting(containerEl)
+			const setting = new Setting(containerEl)
 				.setName(colorType.name)
-				.setDesc(colorType.desc)
-				.addColorPicker((colorPicker: any) => colorPicker
-					.setValue(this.plugin.settings[colorKey][colorType.key as keyof typeof this.plugin.settings.colors])
-					.onChange(async (value: string) => {
-						(this.plugin.settings[colorKey] as any)[colorType.key] = value;
-						await this.plugin.saveSettings();
-						this.plugin.applyCustomColors();
-					}));
+				.setDesc(colorType.desc);
+			
+			// 使用类型断言确保Setting有addColorPicker方法
+			(setting as any).addColorPicker((colorPicker: any) => colorPicker
+				.setValue(this.plugin.settings[colorKey][colorType.key as keyof typeof this.plugin.settings.colors])
+				.onChange(async (value: string) => {
+					(this.plugin.settings[colorKey] as any)[colorType.key] = value;
+					await this.plugin.saveSettings();
+					this.plugin.applyCustomColors();
+				}));
 		});
 	}
 }

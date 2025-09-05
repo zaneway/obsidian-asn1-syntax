@@ -102,6 +102,13 @@ declare module 'obsidian' {
     addToggle(callback: (toggle: ToggleComponent) => ToggleComponent): this;
     addButton(callback: (button: ButtonComponent) => ButtonComponent): this;
     addColorPicker(callback: (colorPicker: ColorComponent) => ColorComponent): this;
+    addText(callback: (text: TextComponent) => TextComponent): this;
+  }
+
+  export interface TextComponent {
+    setPlaceholder(placeholder: string): this;
+    setValue(value: string): this;
+    onChange(callback: (value: string) => any): this;
   }
 
   export interface SliderComponent {

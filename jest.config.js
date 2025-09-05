@@ -19,7 +19,7 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'html'],
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
-  moduleNameMapping: {
+  moduleNameMapper: {
     '^obsidian$': '<rootDir>/tests/__mocks__/obsidian.ts',
     '^codemirror$': '<rootDir>/tests/__mocks__/codemirror.ts',
     '^codemirror/mode/clike/clike$': '<rootDir>/tests/__mocks__/codemirror-clike.ts'
